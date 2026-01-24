@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CONU Overlay</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      overflow: hidden;
+      background: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    }
+
+    canvas {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Control panel - floating text box */
+    .control-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 400px;
+      background: rgba(26, 26, 26, 0.95);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(0, 255, 0, 0.2);
+      z-index: 2;
+      pointer-events: auto;
+    }
+
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #ffffff;
+      user-select: none;
+    }
+
+    .logo span {
+      color: #00ff00;
+    }
+
+    .input-area {
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 80px;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 14px;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+    }
+
+    textarea::placeholder {
+      color: #666;
+    }
+
+    .start-btn {
+      width: 100%;
+      padding: 12px;
+      background: #00ff00;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #000;
+      transition: background 0.2s;
+    }
+
+    .start-btn:hover {
+      background: #00cc00;
+    }
+
+    .start-btn:active {
+      background: #00aa00;
+    }
+
+    .start-btn:disabled {
+      background: #333;
+      color: #666;
+      cursor: not-allowed;
+    }
+
+    .quit-btn {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 12px 24px;
+      background: rgba(255, 0, 0, 0.95);
+      border: 2px solid rgba(255, 255, 255, 0.8);
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      color: #fff;
+      transition: all 0.2s;
+      z-index: 9999;
+      pointer-events: auto;
+      box-shadow: 0 4px 16px rgba(255, 0, 0, 0.5);
+      text-transform: uppercase;
+    }
+
+    .quit-btn:hover {
+      background: rgb(255, 0, 0);
+      border-color: #fff;
+      transform: scale(1.1);
+      box-shadow: 0 6px 24px rgba(255, 0, 0, 0.8);
+    }
+
+    .quit-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Mouse event log */
+    .event-log {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 400px;
+      max-height: 300px;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 11px;
+      color: #00ff00;
+      overflow-y: auto;
+      z-index: 2;
+      pointer-events: none;
+      border: 1px solid rgba(0, 255, 0, 0.3);
+    }
+
+    .event-log-entry {
+      margin-bottom: 4px;
+      white-space: nowrap;
+    }
+
+    .event-log-entry .timestamp {
+      color: #666;
+    }
+
+    .event-log-entry .event-type {
+      color: #00ffff;
+      font-weight: bold;
+    }
+
+    .event-log-entry .coords {
+      color: #ffff00;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="overlay-canvas"></canvas>
+
+  <!-- Quit Button -->
+  <button class="quit-btn" id="quitBtn">Quit (Cmd+Q / ESC)</button>
+
+  <!-- Click Capture Toggle -->
+  <div style="position: absolute; top: 70px; right: 20px; z-index: 9999; pointer-events: auto;">
+    <label style="color: #fff; background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; display: inline-block;">
+      <input type="checkbox" id="captureClicksToggle" style="margin-right: 6px;">
+      <span>Capture & Log All Clicks</span>
+    </label>
+  </div>
+
+  <!-- Control Panel -->
+  <div class="control-panel" id="controlPanel">
+    <div class="logo">CON<span>U</span></div>
+    <div class="input-area">
+      <textarea
+        id="promptInput"
+        placeholder="What do you want to do? e.g., 'Turn on Dark Mode'"
+      ></textarea>
+    </div>
+    <button class="start-btn" id="startBtn" disabled>Start Tutorial</button>
+  </div>
+
+  <!-- Mouse Event Log -->
+  <div class="event-log" id="eventLog">
+    <div style="color: #00ff00; font-weight: bold; margin-bottom: 8px;">MOUSE EVENT LOG</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('overlay-canvas');
+    const ctx = canvas.getContext('2d');
+    const controlPanel = document.getElementById('controlPanel');
+    const promptInput = document.getElementById('promptInput');
+    const startBtn = document.getElementById('startBtn');
+    const eventLog = document.getElementById('eventLog');
+    const quitBtn = document.getElementById('quitBtn');
+    const captureToggle = document.getElementById('captureClicksToggle');
+
+    // Prevent accidental quits on startup
+    let quitButtonReady = false;
+    setTimeout(() => {
+      quitButtonReady = true;
+      console.log('Quit button is now active');
+    }, 1000);
+
+    // Click capture mode
+    let clickCaptureMode = false;
+
+    // Set canvas size to screen size
+    canvas.width = window.screen.width;
+    canvas.height = window.screen.height;
+
+    let currentHighlight = null;
+    let pulsePhase = 0;
+    let animationId = null;
+    const maxLogEntries = 50;
+
+    // Draw border to show overlay bounds
+    function drawBorder() {
+      ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 5]);
+      ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+      ctx.setLineDash([]);
+    }
+
+    function drawHighlight(bbox, instruction) {
+      currentHighlight = { bbox, instruction };
+      if (!animationId) {
+        animate();
+      }
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Always draw border
+      drawBorder();
+
+      if (!currentHighlight) {
+        animationId = requestAnimationFrame(animate);
+        return;
+      }
+
+      const { bbox, instruction } = currentHighlight;
+      const [x1, y1, x2, y2] = bbox;
+      const w = x2 - x1;
+      const h = y2 - y1;
+
+      // Pulsing glow effect
+      pulsePhase += 0.1;
+      const pulse = Math.sin(pulsePhase) * 0.3 + 0.7;
+      const glowSize = 10 + Math.sin(pulsePhase) * 5;
+
+      // Outer glow
+      ctx.shadowColor = `rgba(0, 255, 0, ${pulse})`;
+      ctx.shadowBlur = glowSize;
+      ctx.strokeStyle = '#00ff00';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x1 - 5, y1 - 5, w + 10, h + 10);
+
+      // Inner highlight
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+      ctx.fillRect(x1, y1, w, h);
+
+      // Instruction tooltip
+      if (instruction) {
+        const tooltipY = y2 + 15;
+        const textWidth = ctx.measureText(instruction).width;
+        const boxWidth = Math.max(200, textWidth + 20);
+        const boxHeight = 40;
+        const boxX = x1;
+
+        // Arrow pointing to element
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.beginPath();
+        ctx.moveTo(x1 + w/2, y2 + 5);
+        ctx.lineTo(x1 + w/2 - 8, y2 + 15);
+        ctx.lineTo(x1 + w/2 + 8, y2 + 15);
+        ctx.closePath();
+        ctx.fill();
+
+        // Tooltip box
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(boxX, tooltipY, boxWidth, boxHeight, 6);
+        ctx.fill();
+
+        // Tooltip text
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(instruction, boxX + 10, tooltipY + boxHeight / 2);
+      }
+
+      animationId = requestAnimationFrame(animate);
+    }
+
+    function clearHighlight() {
+      currentHighlight = null;
+    }
+
+    // Mouse event logging
+    function logEvent(eventType, data) {
+      const timestamp = new Date().toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 3
+      });
+
+      const entry = document.createElement('div');
+      entry.className = 'event-log-entry';
+
+      let logText = `<span class="timestamp">${timestamp}</span> `;
+      logText += `<span class="event-type">${eventType.padEnd(12)}</span> `;
+
+      if (data.x !== undefined && data.y !== undefined) {
+        logText += `<span class="coords">x:${Math.round(data.x).toString().padStart(4)} y:${Math.round(data.y).toString().padStart(4)}</span>`;
+      }
+
+      if (data.button !== undefined && data.button !== null) {
+        const buttonNames = { 0: 'LEFT', 1: 'LEFT', 2: 'RIGHT', 3: 'MIDDLE' };
+        const btnName = data.buttonName || buttonNames[data.button] || data.button;
+        logText += ` btn:${btnName}`;
+      }
+
+      if (data.deltaX || data.deltaY) {
+        logText += ` Δx:${Math.round(data.deltaX)} Δy:${Math.round(data.deltaY)}`;
+      }
+
+      entry.innerHTML = logText;
+
+      // Add to top of log
+      const firstEntry = eventLog.querySelector('.event-log-entry');
+      if (firstEntry) {
+        eventLog.insertBefore(entry, firstEntry);
+      } else {
+        eventLog.appendChild(entry);
+      }
+
+      // Limit log entries
+      const entries = eventLog.querySelectorAll('.event-log-entry');
+      if (entries.length > maxLogEntries) {
+        entries[entries.length - 1].remove();
+      }
+    }
+
+    // Listen for highlight commands
+    if (window.overlayAPI) {
+      window.overlayAPI.onHighlight((bbox, instruction) => {
+        console.log('Highlighting:', bbox, instruction);
+        drawHighlight(bbox, instruction);
+      });
+
+      window.overlayAPI.onClearHighlight(() => {
+        console.log('Clearing highlight');
+        clearHighlight();
+      });
+    }
+
+    // Listen for mouse events directly from DOM (when over our UI)
+    document.addEventListener('mousemove', (e) => {
+      if (!window.lastMoveLog || Date.now() - window.lastMoveLog > 100) {
+        logEvent('mouse-move [DOM]', { x: e.screenX, y: e.screenY });
+        window.lastMoveLog = Date.now();
+      }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      logEvent('mouse-down [DOM]', { x: e.screenX, y: e.screenY, button: e.button });
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      logEvent('mouse-up [DOM]', { x: e.screenX, y: e.screenY, button: e.button });
+    });
+
+    document.addEventListener('click', (e) => {
+      logEvent('click [DOM]', { x: e.screenX, y: e.screenY, button: e.button });
+    });
+
+    document.addEventListener('dblclick', (e) => {
+      logEvent('double-click [DOM]', { x: e.screenX, y: e.screenY, button: e.button });
+    });
+
+    document.addEventListener('contextmenu', (e) => {
+      logEvent('right-click [DOM]', { x: e.screenX, y: e.screenY });
+    });
+
+    document.addEventListener('wheel', (e) => {
+      logEvent('scroll [DOM]', { x: e.screenX, y: e.screenY, deltaX: e.deltaX, deltaY: e.deltaY });
+    });
+
+    // Listen for global mouse events from main process (works even when clicking other apps)
+    if (window.electronAPI) {
+      // Global mouse move
+      if (window.electronAPI.onGlobalMouseMove) {
+        window.electronAPI.onGlobalMouseMove((event) => {
+          if (!window.lastGlobalMoveLog || Date.now() - window.lastGlobalMoveLog > 100) {
+            logEvent('mouse-move [GLOBAL]', { x: event.position.x, y: event.position.y });
+            window.lastGlobalMoveLog = Date.now();
+          }
+        });
+      }
+
+      // Global mouse down
+      if (window.electronAPI.onGlobalMouseDown) {
+        window.electronAPI.onGlobalMouseDown((event) => {
+          const buttonNames = { 1: 'LEFT', 2: 'RIGHT', 3: 'MIDDLE' };
+          logEvent('mouse-down [GLOBAL]', {
+            x: event.position.x,
+            y: event.position.y,
+            button: event.button,
+            buttonName: buttonNames[event.button]
+          });
+        });
+      }
+
+      // Global mouse up
+      if (window.electronAPI.onGlobalMouseUp) {
+        window.electronAPI.onGlobalMouseUp((event) => {
+          const buttonNames = { 1: 'LEFT', 2: 'RIGHT', 3: 'MIDDLE' };
+          logEvent('mouse-up [GLOBAL]', {
+            x: event.position.x,
+            y: event.position.y,
+            button: event.button,
+            buttonName: buttonNames[event.button]
+          });
+        });
+      }
+
+      // Global click
+      if (window.electronAPI.onGlobalClick) {
+        window.electronAPI.onGlobalClick((event) => {
+          const buttonNames = { 1: 'LEFT', 2: 'RIGHT', 3: 'MIDDLE' };
+          logEvent('click [GLOBAL]', {
+            x: event.position.x,
+            y: event.position.y,
+            button: event.button,
+            buttonName: buttonNames[event.button],
+            clicks: event.clicks
+          });
+        });
+      }
+
+      // Global scroll
+      if (window.electronAPI.onGlobalScroll) {
+        window.electronAPI.onGlobalScroll((event) => {
+          logEvent('scroll [GLOBAL]', {
+            x: event.position.x,
+            y: event.position.y,
+            rotation: event.rotation,
+            direction: event.direction
+          });
+        });
+      }
+    }
+
+    // Control panel interactivity
+    const controlRect = controlPanel.getBoundingClientRect();
+
+    // Disable click-through when over control panel
+    controlPanel.addEventListener('mouseenter', () => {
+      if (window.electronAPI) {
+        window.electronAPI.send('set-click-through', false);
+      }
+    });
+
+    controlPanel.addEventListener('mouseleave', () => {
+      if (window.electronAPI) {
+        window.electronAPI.send('set-click-through', true);
+      }
+    });
+
+    // Button functionality
+    startBtn.addEventListener('click', () => {
+      const prompt = promptInput.value.trim();
+      if (!prompt) return;
+      console.log('Starting tutorial:', prompt);
+      logEvent('USER_ACTION', { message: 'Start tutorial: ' + prompt });
+    });
+
+    promptInput.addEventListener('input', () => {
+      startBtn.disabled = !promptInput.value.trim();
+    });
+
+    // Quit button - disable click-through when hovering
+    quitBtn.addEventListener('mouseenter', () => {
+      console.log('QUIT BUTTON HOVERED - disabling click-through');
+      logEvent('UI_EVENT', { message: 'Quit button hovered' });
+      if (window.electronAPI) {
+        window.electronAPI.send('set-click-through', false);
+      }
+    });
+
+    quitBtn.addEventListener('mouseleave', () => {
+      console.log('QUIT BUTTON LEFT - enabling click-through');
+      if (window.electronAPI) {
+        window.electronAPI.send('set-click-through', true);
+      }
+    });
+
+    quitBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!quitButtonReady) {
+        console.log('Quit button not ready yet (preventing accidental quit on startup)');
+        return;
+      }
+
+      console.log('===== QUIT BUTTON CLICKED! =====');
+      logEvent('UI_EVENT', { message: 'QUIT BUTTON CLICKED' });
+
+      if (window.electronAPI) {
+        console.log('Sending quit-app IPC...');
+        window.electronAPI.send('quit-app');
+
+        // Backup: force quit after 500ms if IPC doesn't work
+        setTimeout(() => {
+          console.error('IPC quit failed, showing alert');
+          alert('Quit failed! Press Escape or Cmd+Q to force quit, or run ./kill.sh');
+        }, 500);
+      } else {
+        console.error('electronAPI not available!');
+        alert('electronAPI not available! Run ./kill.sh to force quit');
+      }
+    });
+
+    // Click capture toggle - this disables click-through so we can log clicks
+    captureToggle.addEventListener('change', () => {
+      clickCaptureMode = captureToggle.checked;
+      console.log('Click capture mode:', clickCaptureMode);
+      logEvent('SYSTEM', { message: `Click capture mode: ${clickCaptureMode ? 'ON' : 'OFF'}` });
+
+      // When enabled, disable click-through globally to capture all clicks on overlay
+      if (window.electronAPI) {
+        window.electronAPI.send('set-click-through', !clickCaptureMode);
+      }
+    });
+
+    // Start animation loop to show border
+    animate();
+
+    // Test highlight
+    setTimeout(() => {
+      drawHighlight([100, 100, 300, 150], 'Click here to test');
+    }, 2000);
+
+    console.log('Overlay loaded. Canvas size:', canvas.width, 'x', canvas.height);
+  </script>
+</body>
+</html>
