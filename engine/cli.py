@@ -136,15 +136,19 @@ def cmd_run(args):
         print(f"\n[Step {step_num}/{len(plan.steps)}] {step.instruction}")
         print(f"  Locating: '{step.target_text}' in region '{step.region}'...")
 
+        # Delay before each step so user can switch to target app
+        print("  (2 second delay - switch to target app...)")
+        time.sleep(2)
+
+        # Take fresh screenshot and update window regions
+        img = take_screenshot()
+
         # Debug: show actual region coordinates
         try:
             region_obj = region_mgr.get(step.region)
             print(f"  Region coords: ({region_obj.x1:.2f}, {region_obj.y1:.2f}) -> ({region_obj.x2:.2f}, {region_obj.y2:.2f})")
         except Exception:
             pass
-
-        # Take fresh screenshot and update window regions
-        img = take_screenshot()
         region_mgr.update_for_active_window(img.size[0], img.size[1])
 
         # Locate the element (pass instruction for verification)

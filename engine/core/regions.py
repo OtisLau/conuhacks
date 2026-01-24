@@ -10,6 +10,33 @@ from PIL import Image
 from engine.core.exceptions import InvalidRegionError
 
 
+def get_retina_scale_factor() -> float:
+    """
+    Get the Retina scale factor for the main display.
+
+    Returns:
+        Scale factor (2.0 for Retina, 1.0 for standard displays).
+    """
+    script = '''
+    use framework "AppKit"
+    set mainScreen to current application's NSScreen's mainScreen()
+    return (mainScreen's backingScaleFactor()) as real
+    '''
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+    except Exception:
+        pass
+    # Default to 2.0 for modern Macs (safer assumption)
+    return 2.0
+
+
 def get_active_window_bounds() -> Optional[Tuple[int, int, int, int]]:
     """
     Get the bounds of the active (frontmost) window on macOS.
@@ -104,8 +131,8 @@ def get_window_relative_regions(
     Create regions relative to the active window.
 
     Args:
-        screen_width: Full screen width in pixels
-        screen_height: Full screen height in pixels
+        screen_width: Full screen width in pixels (screenshot resolution)
+        screen_height: Full screen height in pixels (screenshot resolution)
         window_bounds: (x, y, width, height) of window, or None to auto-detect
 
     Returns:
@@ -119,6 +146,14 @@ def get_window_relative_regions(
         return REGIONS.copy()
 
     wx, wy, ww, wh = window_bounds
+
+    # AppleScript returns logical pixels, but screenshot is in physical (Retina) pixels
+    # Multiply by scale factor to convert to physical pixels
+    scale = get_retina_scale_factor()
+    wx = int(wx * scale)
+    wy = int(wy * scale)
+    ww = int(ww * scale)
+    wh = int(wh * scale)
 
     # Convert window pixel coords to normalized screen coords
     def to_norm(px_x, px_y, px_w, px_h):

@@ -4,7 +4,7 @@ OCR-based text locator using Tesseract.
 
 import time
 from difflib import SequenceMatcher
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
 from PIL import Image
 import pytesseract
 
@@ -97,6 +97,55 @@ class OCRLocator(BaseLocator):
         scored.sort(key=lambda x: x[1], reverse=True)
         return [text for text, _ in scored[:limit]]
 
+    def _build_phrases(self, data: Dict[str, Any], offset: Tuple[int, int], max_words: int = 4) -> List[Dict[str, Any]]:
+        """
+        Build multi-word phrases from adjacent OCR words on the same line.
+
+        Returns list of phrase candidates with their bounding boxes.
+        """
+        phrases = []
+        n = len(data["text"])
+
+        # Group words by line (same block_num, line_num)
+        lines: Dict[Tuple[int, int], List[int]] = {}
+        for i in range(n):
+            if not data["text"][i].strip():
+                continue
+            key = (data["block_num"][i], data["line_num"][i])
+            if key not in lines:
+                lines[key] = []
+            lines[key].append(i)
+
+        # For each line, build all possible phrases up to max_words
+        for line_indices in lines.values():
+            # Sort by x position (left)
+            line_indices.sort(key=lambda i: data["left"][i])
+
+            for start in range(len(line_indices)):
+                for length in range(1, min(max_words + 1, len(line_indices) - start + 1)):
+                    indices = line_indices[start:start + length]
+
+                    # Combine text
+                    phrase_text = " ".join(data["text"][i] for i in indices)
+
+                    # Combine bounding box
+                    x1 = min(data["left"][i] for i in indices) + offset[0]
+                    y1 = min(data["top"][i] for i in indices) + offset[1]
+                    x2 = max(data["left"][i] + data["width"][i] for i in indices) + offset[0]
+                    y2 = max(data["top"][i] + data["height"][i] for i in indices) + offset[1]
+
+                    # Average confidence
+                    avg_conf = sum(int(data["conf"][i]) for i in indices) // len(indices)
+
+                    phrases.append({
+                        "text": phrase_text,
+                        "bbox": BoundingBox(x1, y1, x2, y2),
+                        "confidence": avg_conf,
+                        "word_count": length,
+                    })
+
+        return phrases
+
     def locate(
         self,
         img: Image.Image,
@@ -111,7 +160,7 @@ class OCRLocator(BaseLocator):
 
         Args:
             img: Screenshot as PIL Image
-            target: Text to find
+            target: Text to find (can be multi-word phrase)
             region: Screen region to search in
             fuzzy: Allow fuzzy matching (default True)
             return_all: If True, return all matches in result.all_matches
@@ -128,16 +177,35 @@ class OCRLocator(BaseLocator):
         data = self._run_ocr(cropped)
 
         target_lower = target.lower()
+        target_word_count = len(target.split())
         all_matches = []
         fuzzy_threshold = self.config.ocr_fuzzy_threshold
 
-        # Search through OCR results
-        for i, text in enumerate(data["text"]):
-            if not text.strip():
-                continue
+        # Build phrases if target is multi-word
+        if target_word_count > 1:
+            candidates = self._build_phrases(data, offset, max_words=target_word_count + 1)
+        else:
+            # Single word - use original approach
+            candidates = []
+            for i, text in enumerate(data["text"]):
+                if not text.strip():
+                    continue
+                x = data["left"][i] + offset[0]
+                y = data["top"][i] + offset[1]
+                w = data["width"][i]
+                h = data["height"][i]
+                candidates.append({
+                    "text": text,
+                    "bbox": BoundingBox(x, y, x + w, y + h),
+                    "confidence": int(data["conf"][i]),
+                    "word_count": 1,
+                })
 
+        # Search through candidates
+        for cand in candidates:
+            text = cand["text"]
             text_lower = text.lower()
-            conf = int(data["conf"][i])
+            conf = cand["confidence"]
 
             # Exact match
             if target_lower == text_lower:
@@ -152,14 +220,9 @@ class OCRLocator(BaseLocator):
                 score = 0
 
             if score >= fuzzy_threshold:
-                x = data["left"][i] + offset[0]
-                y = data["top"][i] + offset[1]
-                w = data["width"][i]
-                h = data["height"][i]
-
                 all_matches.append({
                     "text": text,
-                    "bbox": BoundingBox(x, y, x + w, y + h),
+                    "bbox": cand["bbox"],
                     "confidence": conf,
                     "match_score": score,
                     "weighted_score": score * (conf / 100),
