@@ -1,0 +1,5 @@
+google-generativeai
+pillow
+python-dotenv
+pytesseract
+replicate

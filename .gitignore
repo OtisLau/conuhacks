@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Images/Screenshots (generated)
+*.png
+*.jpg
+*.jpeg
+
+# Node.js (for Electron app)
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+
+# Electron
+out/
+.electron/
+
+# Testing artifacts
+*.json
+!package.json
+!package-lock.json
+!electron-builder.json
+
+# Claude
+.claude/
