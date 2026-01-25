@@ -934,23 +934,21 @@
 
     // Auto-resize textarea and control panel based on content
     function autoResizeTextarea() {
-      // Reset height to get accurate scrollHeight
-      promptInput.style.height = '40px';
-      controlPanel.style.height = '40px';
+      // Temporarily remove height to force browser to recalculate based on content
+      promptInput.style.height = 'auto';
 
-      // Calculate new height based on content (with min/max constraints)
+      // Get the actual content height
       const scrollHeight = promptInput.scrollHeight;
+
+      // Calculate new height (min 40px, max 120px)
       const newHeight = Math.min(Math.max(scrollHeight, 40), 120);
 
+      // Apply the new height to both textarea and container
       promptInput.style.height = newHeight + 'px';
       controlPanel.style.height = newHeight + 'px';
 
-      // Adjust border radius when expanded
-      if (newHeight > 40) {
-        controlPanel.style.borderRadius = '20px';
-      } else {
-        controlPanel.style.borderRadius = '20px';
-      }
+      // Keep border radius consistent
+      controlPanel.style.borderRadius = '20px';
     }
 
     // Listen for input changes to auto-resize
