@@ -67,24 +67,9 @@
       font-weight: 300; /* Lighter font weight */
     }
 
-    /* Mouse event log */
+    /* Mouse event log - hidden for now */
     .event-log {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      width: 400px;
-      max-height: 300px;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(10px);
-      border-radius: 8px;
-      padding: 12px;
-      font-family: 'Monaco', 'Courier New', monospace;
-      font-size: 11px;
-      color: #8e8e93;
-      overflow-y: auto;
-      z-index: 2;
-      pointer-events: none;
-      border: 1px solid rgba(142, 142, 147, 0.3);
+      display: none;
     }
 
     .event-log-entry {
@@ -309,12 +294,13 @@
     // Spotlight circle state
     let mouseX = canvas.width / 2;
     let mouseY = canvas.height / 2;
-    const circleRadius = 100;
+    const defaultCircleRadius = 40; // Smaller default
 
     // Tutorial mode variables
     let tutorialMode = false;
     let fixedSpotlightX = null;
     let fixedSpotlightY = null;
+    let spotlightRadius = defaultCircleRadius; // Dynamic radius based on bbox
     let lastTargetClickTime = 0; // Debounce target clicks
 
     // Draw border to show overlay bounds
@@ -327,15 +313,19 @@
     }
 
     // Draw spotlight circle - ONLY when in tutorial mode with a target
+    let lastSpotlightLog = 0;
     function drawSpotlightCircle() {
       // Only draw if we're in tutorial mode with a valid target position
       if (!tutorialMode || fixedSpotlightX === null || fixedSpotlightY === null) {
         return; // Don't draw anything
       }
+      if (Date.now() - lastSpotlightLog > 1000) {
+        console.log('Drawing spotlight at:', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
+        lastSpotlightLog = Date.now();
+      }
 
-      // Scale radius for physical pixels (Retina)
       const dpr = window.devicePixelRatio || 1;
-      const physicalRadius = circleRadius * dpr;
+      const physicalRadius = spotlightRadius;
 
       ctx.beginPath();
       ctx.arc(fixedSpotlightX, fixedSpotlightY, physicalRadius, 0, 2 * Math.PI);
@@ -533,21 +523,37 @@
       console.log('Screen:', window.screen.width, 'x', window.screen.height);
 
       if (window.electronAPI.onSetSpotlightPosition) {
-        window.electronAPI.onSetSpotlightPosition((coords) => {
-          console.log('=== SPOTLIGHT POSITION RECEIVED ===', coords);
-          logEvent('SPOTLIGHT', { coords: coords ? `${coords.x},${coords.y}` : 'null' });
-          if (coords) {
+        window.electronAPI.onSetSpotlightPosition((data) => {
+          console.log('=== SPOTLIGHT POSITION RECEIVED ===', data);
+          logEvent('SPOTLIGHT', { coords: data ? `${data.x},${data.y}` : 'null' });
+          if (data) {
             tutorialMode = true;
-            // Don't scale - use coordinates directly
-            // The engine returns coordinates matching the screen space
-            fixedSpotlightX = coords.x;
-            fixedSpotlightY = coords.y;
-            console.log('Tutorial mode: ON, spotlight at', fixedSpotlightX, fixedSpotlightY);
+            // Use coordinates directly (already in physical pixel space)
+            fixedSpotlightX = data.x;
+            fixedSpotlightY = data.y;
+
+            // Calculate radius from bounding box if available
+            if (data.bbox && Array.isArray(data.bbox) && data.bbox.length === 4) {
+              const [x1, y1, x2, y2] = data.bbox;
+              const bboxWidth = Math.abs(x2 - x1);
+              const bboxHeight = Math.abs(y2 - y1);
+              // Use the larger dimension + padding for circle radius, with minimum
+              const calcRadius = Math.max(bboxWidth, bboxHeight) / 2 + 20;
+              spotlightRadius = Math.max(calcRadius, 50); // Minimum 50px radius
+              console.log('Bbox:', data.bbox, 'Size:', bboxWidth, 'x', bboxHeight, 'Radius:', spotlightRadius);
+            } else {
+              // Fallback to default radius scaled for Retina
+              spotlightRadius = defaultCircleRadius * dpr;
+              console.log('No bbox, using default radius:', spotlightRadius);
+            }
+
+            console.log('Tutorial mode: ON, spotlight at', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
           } else {
             // Return to mouse-following mode
             tutorialMode = false;
             fixedSpotlightX = null;
             fixedSpotlightY = null;
+            spotlightRadius = defaultCircleRadius * dpr;
             console.log('Tutorial mode: OFF, following mouse');
           }
         });

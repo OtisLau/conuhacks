@@ -18,7 +18,6 @@ let tutorialState = {
 };
 
 function forceQuit() {
-  console.log('FORCE QUIT CALLED');
 
   // Stop mouse tracking
   stopGlobalMouseTracking();
@@ -37,13 +36,23 @@ function forceQuit() {
 
 function createOverlayWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { x, y, width, height } = primaryDisplay.workArea;
+  // Use workArea (excludes menu bar) for window position
+  // We'll adjust coordinates to account for the offset
+  const workArea = primaryDisplay.workArea;
+  const bounds = primaryDisplay.bounds;
+
+  // Store the offset for coordinate adjustment
+  global.menuBarOffset = {
+    x: workArea.x - bounds.x,
+    y: workArea.y - bounds.y
+  };
+  console.log('Menu bar offset:', global.menuBarOffset);
 
   overlayWindow = new BrowserWindow({
-    x,
-    y,
-    width,
-    height,
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
     transparent: true,
     frame: false,
     alwaysOnTop: true,
@@ -74,7 +83,7 @@ function createOverlayWindow() {
 
 function createSpotlightWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { x, y, width, height } = primaryDisplay.workArea;
+  const { x, y, width, height } = primaryDisplay.bounds;
 
   spotlightWindow = new BrowserWindow({
     x,
@@ -111,14 +120,12 @@ function createSpotlightWindow() {
 
 function setupIpcHandlers() {
   ipcMain.on('set-click-through', (event, enabled) => {
-    console.log('Click-through mode:', enabled);
     if (overlayWindow) {
       overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
     }
   });
 
   ipcMain.on('set-global-click-through', (event, enabled) => {
-    console.log('Global click-through mode:', enabled);
     if (overlayWindow) {
       overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
     }
@@ -126,21 +133,9 @@ function setupIpcHandlers() {
 
   ipcMain.on('forward-click', (event, data) => {
     // Clicks automatically pass through when click-through is enabled
-    // This just logs the click event
-    console.log(`Click at (${data.x}, ${data.y}) - button: ${data.button}`);
   });
 
   ipcMain.on('quit-app', (event) => {
-    console.log('Quit app IPC received from a window!');
-    if (event && event.sender) {
-      const senderWindow = BrowserWindow.fromWebContents(event.sender);
-      if (senderWindow) {
-          console.log(`Quit signal from window with ID: ${senderWindow.id}`);
-          // To get more info, we can check the window's title or URL
-          console.log(`Window Title: ${senderWindow.getTitle()}`);
-          console.log(`Window URL: ${senderWindow.webContents.getURL()}`);
-      }
-    }
     forceQuit();
   });
 
@@ -155,7 +150,6 @@ function setupIpcHandlers() {
       // Take screenshot
       console.log('Taking screenshot...');
       const screenshotPath = await engineBridge.takeScreenshot();
-      console.log('Screenshot saved to:', screenshotPath);
 
       // Generate plan
       console.log('Generating plan...');
@@ -180,7 +174,6 @@ function setupIpcHandlers() {
   // Tutorial: User clicked the target
   ipcMain.on('target-clicked', async () => {
     if (tutorialState.mode === 'highlighting') {
-      console.log('Target clicked, advancing to next step...');
       tutorialState.currentStepIndex++;
 
       // Clear the spotlight while waiting for next step
@@ -203,7 +196,6 @@ function setupIpcHandlers() {
 
   // Tutorial: Cancel/reset tutorial
   ipcMain.on('cancel-tutorial', () => {
-    console.log('Canceling tutorial');
     tutorialState = {
       mode: 'idle',
       plan: null,
@@ -239,13 +231,12 @@ async function executeCurrentStep(retryCount = 0) {
     return;
   }
 
-  console.log(`Executing step ${tutorialState.currentStepIndex + 1} (attempt ${retryCount + 1}/${MAX_RETRIES}):`, step);
+  console.log(`Executing step ${tutorialState.currentStepIndex + 1}:`, step);
   tutorialState.mode = 'locating';
   overlayWindow.webContents.send('tutorial-state-change', tutorialState);
 
   // Take fresh screenshot
   const screenshotPath = await engineBridge.takeScreenshot();
-  console.log('Fresh screenshot for locate:', screenshotPath);
 
   // Locate target element
   const result = await engineBridge.locateElement(
@@ -255,18 +246,33 @@ async function executeCurrentStep(retryCount = 0) {
     step.is_icon || false
   );
 
-  console.log('Locate result:', result);
-
+  console.log('Locate result:', JSON.stringify(result));
   if (result.found && result.center) {
     tutorialState.mode = 'highlighting';
-    tutorialState.targetCoords = { x: result.center[0], y: result.center[1] };
+    // Adjust coordinates for menu bar offset (workArea vs full screen)
+    const offset = global.menuBarOffset || { x: 0, y: 0 };
+    const dpr = screen.getPrimaryDisplay().scaleFactor || 2;
+    // Screenshot coords are in physical pixels, adjust for menu bar (also in physical pixels)
+    const offsetY = offset.y * dpr;
+
+    const spotlightData = {
+      x: result.center[0],
+      y: result.center[1] - offsetY,  // Adjust for menu bar
+      bbox: result.bbox ? [
+        result.bbox[0],
+        result.bbox[1] - offsetY,
+        result.bbox[2],
+        result.bbox[3] - offsetY
+      ] : null
+    };
+    tutorialState.targetCoords = spotlightData;
+    console.log('Spotlight target (adjusted):', spotlightData, 'offset:', offsetY);
     overlayWindow.webContents.send('tutorial-state-change', tutorialState);
-    overlayWindow.webContents.send('set-spotlight-position', tutorialState.targetCoords);
-    console.log('Spotlight positioned at:', tutorialState.targetCoords);
+    overlayWindow.webContents.send('set-spotlight-position', spotlightData);
   } else {
+    console.log('Element not found, suggestions:', result.suggestions);
     // Retry if we haven't exceeded max retries
     if (retryCount < MAX_RETRIES - 1) {
-      console.log(`Element not found, retrying in ${RETRY_DELAY}ms... (attempt ${retryCount + 2}/${MAX_RETRIES})`);
       setTimeout(async () => {
         try {
           await executeCurrentStep(retryCount + 1);
@@ -278,11 +284,19 @@ async function executeCurrentStep(retryCount = 0) {
         }
       }, RETRY_DELAY);
     } else {
-      // All retries exhausted
-      tutorialState.mode = 'error';
-      tutorialState.error = `Could not find "${step.target_text}" after ${MAX_RETRIES} attempts${result.suggestions ? '. Suggestions: ' + result.suggestions.join(', ') : ''}`;
-      overlayWindow.webContents.send('tutorial-state-change', tutorialState);
-      console.error('Element not found after retries:', tutorialState.error);
+      // All retries exhausted - skip to next step instead of stopping
+      tutorialState.currentStepIndex++;
+
+      // Check if there are more steps
+      if (tutorialState.currentStepIndex < tutorialState.plan.steps.length) {
+        // Try the next step
+        await executeCurrentStep(0);
+      } else {
+        // No more steps
+        tutorialState.mode = 'complete';
+        tutorialState.error = null;
+        overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+      }
     }
   }
 }
@@ -343,16 +357,10 @@ function startGlobalMouseTracking() {
 
     // Start the hook
     uIOhook.start();
-    console.log('✅ Global mouse hooks started with uiohook-napi');
-    console.log('⚠️  If clicks are not being detected, enable Accessibility permissions for Electron in System Settings');
   } catch (err) {
-    console.error('❌ Failed to start global mouse hooks:', err.message);
-    console.log('⚠️  Accessibility permissions may be required');
-    console.log('⚠️  Go to: System Settings > Privacy & Security > Accessibility');
-    console.log('⚠️  Add Electron to the list of allowed apps');
+    console.error('Failed to start mouse hooks - check Accessibility permissions');
 
     // Fall back to position-only tracking
-    console.log('📍 Falling back to position-only tracking (no click detection)');
     mouseTrackingInterval = setInterval(() => {
       const pos = screen.getCursorScreenPoint();
       if (pos.x !== lastMousePos.x || pos.y !== lastMousePos.y) {
@@ -371,9 +379,8 @@ function startGlobalMouseTracking() {
 function stopGlobalMouseTracking() {
   try {
     uIOhook.stop();
-    console.log('Global mouse hooks stopped');
   } catch (err) {
-    console.error('Error stopping hooks:', err);
+    // Ignore stop errors
   }
 }
 
@@ -383,11 +390,9 @@ app.whenReady().then(() => {
 
   // Start global mouse tracking
   startGlobalMouseTracking();
-  console.log('Global mouse position tracking started');
 
   // Register global keyboard shortcut for quitting
   globalShortcut.register('CommandOrControl+Q', () => {
-    console.log('Cmd+Q pressed - quitting app');
     forceQuit();
   });
 

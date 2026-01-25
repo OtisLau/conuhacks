@@ -5,6 +5,9 @@ pillow>=10.0.0
 pytesseract>=0.3.10
 python-dotenv>=1.0.0
 
+# macOS window detection
+pyobjc-framework-Quartz>=10.0; sys_platform == "darwin"
+
 # Gemini AI
 google-generativeai>=0.3.0
 

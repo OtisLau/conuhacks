@@ -42,12 +42,13 @@ EXAMPLE - "Turn on dark mode" from System Settings:
 STEP 3 - RETURN JSON:
 {{"analysis": "Brief description of what you see and what steps are needed",
   "steps": [
-    {{"instruction": "Click Appearance", "target_text": "Appearance", "region": "sidebar", "is_icon": false}},
-    {{"instruction": "Click Dark to enable dark mode", "target_text": "Dark", "region": "main", "is_icon": false}}
+    {{"instruction": "Click Appearance", "target_text": "Appearance", "region": "window", "is_icon": false}},
+    {{"instruction": "Click Dark to enable dark mode", "target_text": "Dark", "region": "window", "is_icon": false}}
   ]
 }}
 
-Regions: menu_bar, toolbar, sidebar, main, bottom, dock, full
+Regions: window (active app), full (entire screen), menu_bar, dock
+Use "window" for elements inside the app. Use "full" if unsure.
 is_icon: true ONLY for icons without any text label
 
 Return valid JSON only.'''

@@ -102,13 +102,10 @@ function getScreenRegion(point, screenBounds = null) {
   const nx = (point.x - bounds.x) / width;
   const ny = (point.y - bounds.y) / height;
 
-  // Region definitions (matching MASTER_PLAN.md)
+  // Simplified region definitions - no hardcoded sub-window regions
   const regions = {
     menu_bar: { bounds: [0, 0, 1, 0.04] },
-    toolbar: { bounds: [0, 0.04, 1, 0.12] },
-    sidebar: { bounds: [0, 0.04, 0.25, 0.95] },
-    main: { bounds: [0.25, 0.04, 1, 0.95] },
-    bottom: { bounds: [0, 0.90, 1, 1] },
+    dock: { bounds: [0, 0.95, 1, 1] },
   };
 
   for (const [name, region] of Object.entries(regions)) {

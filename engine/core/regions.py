@@ -81,44 +81,38 @@ def get_frontmost_app_excluding(excluded_apps: list) -> Optional[str]:
     Returns:
         Name of the frontmost non-excluded app, or None if not found.
     """
-    # Get all visible application processes with windows, sorted by layer order
-    script = '''
-    tell application "System Events"
-        set appList to {}
-        repeat with proc in (every application process whose visible is true)
-            try
-                if (count of windows of proc) > 0 then
-                    set end of appList to name of proc
-                end if
-            end try
-        end repeat
-        return appList
-    end tell
-    '''
-    try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            # Parse the AppleScript list output
-            apps_str = result.stdout.strip()
-            # AppleScript returns like: "App1, App2, App3"
-            apps = [a.strip() for a in apps_str.split(",")]
+    excluded_lower = [e.lower() for e in excluded_apps]
 
-            excluded_lower = [e.lower() for e in excluded_apps]
-            for app in apps:
-                if app.lower() not in excluded_lower:
-                    return app
+    # First, check the frontmost app
+    frontmost = get_frontmost_app_name()
+    if frontmost and frontmost.lower() not in excluded_lower:
+        return frontmost
+
+    # If frontmost is excluded, get the window list in z-order using CGWindowListCopyWindowInfo
+    # This Python approach uses Quartz to get actual window ordering
+    try:
+        import Quartz
+        # Get windows in front-to-back order
+        window_list = Quartz.CGWindowListCopyWindowInfo(
+            Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
+            Quartz.kCGNullWindowID
+        )
+
+        for window in window_list:
+            owner = window.get('kCGWindowOwnerName', '')
+            # Skip windows without names or that are excluded
+            if not owner or owner.lower() in excluded_lower:
+                continue
+            # Skip windows that are too small (like menu bar items)
+            bounds = window.get('kCGWindowBounds', {})
+            width = bounds.get('Width', 0)
+            height = bounds.get('Height', 0)
+            if width > 100 and height > 100:
+                return owner
+    except ImportError:
+        pass
     except Exception:
         pass
-
-    # Fallback: just get frontmost and check
-    frontmost = get_frontmost_app_name()
-    if frontmost and frontmost.lower() not in [e.lower() for e in excluded_apps]:
-        return frontmost
 
     return None
 
@@ -211,22 +205,10 @@ def get_window_relative_regions(
         y2 = (px_y + px_h) / screen_height
         return (x1, y1, x2, y2)
 
-    # Window-relative regions (for typical macOS settings window)
-    # Sidebar is usually ~30% of window width on left
-    # Main content is the rest
-    sidebar_width = int(ww * 0.30)
-    toolbar_height = int(wh * 0.08)
-
+    # Simple regions - no hardcoded sub-window splits
+    # Different apps have different layouts, so we just use the window bounds
     return {
-        # Full window
         "window": to_norm(wx, wy, ww, wh),
-        # Window sidebar (left 30%)
-        "sidebar": to_norm(wx, wy + toolbar_height, sidebar_width, wh - toolbar_height),
-        # Window main area (right 70%)
-        "main": to_norm(wx + sidebar_width, wy + toolbar_height, ww - sidebar_width, wh - toolbar_height),
-        # Window toolbar (top of window)
-        "toolbar": to_norm(wx, wy, ww, toolbar_height),
-        # Keep screen-level regions too
         "menu_bar": (0.0, 0.0, 1.0, 0.03),
         "dock": (0.0, 0.95, 1.0, 1.0),
         "full": (0.0, 0.0, 1.0, 1.0),
@@ -238,19 +220,11 @@ RegionCoords = Tuple[float, float, float, float]  # x1, y1, x2, y2
 
 
 # Default screen regions for macOS
+# Keep this minimal - dynamic window detection handles most cases
 REGIONS: Dict[str, RegionCoords] = {
-    "menu_bar": (0.0, 0.0, 1.0, 0.04),
-    "toolbar": (0.0, 0.04, 1.0, 0.12),
-    "sidebar": (0.0, 0.04, 0.25, 0.95),
-    "main": (0.25, 0.04, 1.0, 0.95),
-    "bottom": (0.0, 0.90, 1.0, 1.0),
-    "dock": (0.0, 0.95, 1.0, 1.0),
     "full": (0.0, 0.0, 1.0, 1.0),
-    "center": (0.25, 0.25, 0.75, 0.75),
-    "top_half": (0.0, 0.0, 1.0, 0.5),
-    "bottom_half": (0.0, 0.5, 1.0, 1.0),
-    "left_half": (0.0, 0.0, 0.5, 1.0),
-    "right_half": (0.5, 0.0, 1.0, 1.0),
+    "menu_bar": (0.0, 0.0, 1.0, 0.04),
+    "dock": (0.0, 0.95, 1.0, 1.0),
 }
 
 

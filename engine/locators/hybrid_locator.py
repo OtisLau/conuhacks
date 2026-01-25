@@ -295,18 +295,36 @@ class HybridLocator(BaseLocator):
         start = time.time()
         all_suggestions: List[str] = []
 
-        # Try OCR first (unless explicitly icon)
-        if not is_icon:
-            result = self._try_ocr(img, target, region, **kwargs)
+        # Always try OCR (OmniParser icon detection is disabled)
+        result = self._try_ocr(img, target, region, **kwargs)
+        if result.found:
+            all_matches = getattr(result, 'all_matches', [])
+
+            # Verify with Gemini if we have instruction context
+            if len(all_matches) >= 1 and instruction:
+                best_match = self._pick_best_match(img, all_matches, target, instruction)
+                if best_match is None:
+                    result.found = False
+                    result.suggestions = ["Found text but not in correct context"]
+                else:
+                    result.bbox = best_match["bbox"]
+                    result.element = best_match["text"]
+                    result.confidence = best_match["confidence"]
+
+            if result.found:
+                result.method = LocatorMethod.HYBRID
+                result.time_ms = (time.time() - start) * 1000
+                return result
+        all_suggestions.extend(result.suggestions or [])
+
+        # Fallback: if region search failed, try full screen
+        if region != "full":
+            result = self._try_ocr(img, target, "full", **kwargs)
             if result.found:
                 all_matches = getattr(result, 'all_matches', [])
-
-                # Always verify with Gemini if we have instruction context
-                # Even single matches could be wrong (e.g., text in terminal)
                 if len(all_matches) >= 1 and instruction:
                     best_match = self._pick_best_match(img, all_matches, target, instruction)
                     if best_match is None:
-                        # Gemini says none of the matches are correct
                         result.found = False
                         result.suggestions = ["Found text but not in correct context"]
                     else:
@@ -319,41 +337,6 @@ class HybridLocator(BaseLocator):
                     result.time_ms = (time.time() - start) * 1000
                     return result
             all_suggestions.extend(result.suggestions or [])
-
-            # Fallback: if region search failed, try the window region (not full screen)
-            # This avoids finding text in other windows like terminal
-            if region != "full" and region != "window":
-                # Try window region first (stays within target app)
-                fallback_region = "window" if "window" in [r for r in self.regions.list_regions()] else "full"
-                result = self._try_ocr(img, target, fallback_region, **kwargs)
-                if result.found:
-                    all_matches = getattr(result, 'all_matches', [])
-                    if len(all_matches) >= 1 and instruction:
-                        best_match = self._pick_best_match(img, all_matches, target, instruction)
-                        if best_match is None:
-                            result.found = False
-                            result.suggestions = ["Found text but not in correct context"]
-                        else:
-                            result.bbox = best_match["bbox"]
-                            result.element = best_match["text"]
-                            result.confidence = best_match["confidence"]
-
-                    if result.found:
-                        result.method = LocatorMethod.HYBRID
-                        result.time_ms = (time.time() - start) * 1000
-                        return result
-                all_suggestions.extend(result.suggestions or [])
-
-        # Fall back to icon detection
-        self._stats["fallbacks"] += 1
-        result = self._try_icon(img, target, region, **kwargs)
-
-        if result.found:
-            result.method = LocatorMethod.HYBRID
-            result.time_ms = (time.time() - start) * 1000
-            return result
-
-        all_suggestions.extend(result.suggestions)
 
         # Not found
         elapsed_ms = (time.time() - start) * 1000

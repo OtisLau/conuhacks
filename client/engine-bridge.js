@@ -13,7 +13,7 @@ function runEngineCommand(command, args) {
     // Use the venv Python to ensure dependencies are available
     const proc = spawn(VENV_PYTHON, ['-m', 'engine.cli', command, ...args], {
       cwd: PROJECT_ROOT,
-      env: { ...process.env }
+      env: { ...process.env, PYTHONPATH: PROJECT_ROOT }
     });
 
     let stdout = '';

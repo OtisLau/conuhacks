@@ -7,8 +7,10 @@ from PIL import Image
 import google.generativeai as genai
 
 from engine.core.types import Step, Plan, LocatorResult, BoundingBox
-from engine.core.regions import REGIONS
 from engine.config import Config, get_config
+
+# Valid region names (includes dynamic "window" region)
+VALID_REGIONS = {"full", "window", "menu_bar", "dock"}
 
 
 class PlanValidator:
@@ -45,7 +47,7 @@ class PlanValidator:
             warnings.append("Target text is too short or empty")
 
         # Check region
-        if step.region not in REGIONS:
+        if step.region not in VALID_REGIONS:
             warnings.append(f"Unknown region: {step.region}")
 
         # Check instruction

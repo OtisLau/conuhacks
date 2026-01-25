@@ -10,7 +10,7 @@ from PIL import Image
 import google.generativeai as genai
 
 from engine.core.types import BoundingBox, LocatorResult, LocatorMethod
-from engine.core.regions import RegionManager, get_region_manager, REGIONS
+from engine.core.regions import RegionManager, get_region_manager
 from engine.core.exceptions import IconDetectionError, OmniParserError, GeminiValidationError
 from engine.locators.base import BaseLocator
 from engine.config import Config, get_config
@@ -86,8 +86,12 @@ class IconLocator(BaseLocator):
         if region_name == "full":
             return elements
 
-        region_coords = REGIONS.get(region_name, REGIONS["full"])
-        x1, y1, x2, y2 = region_coords
+        try:
+            region = self.regions.get(region_name)
+            x1, y1, x2, y2 = region.coords
+        except Exception:
+            # If region not found, don't filter
+            return elements
 
         filtered = []
         for el in elements:
