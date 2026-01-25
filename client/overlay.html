@@ -605,10 +605,8 @@
       if (spotlightAnimating) {
         const elapsed = Date.now() - spotlightAnimationStart;
         const progress = Math.min(elapsed / SPOTLIGHT_ANIMATION_DURATION, 1);
-        // Ease-in-out cubic for smooth acceleration and deceleration
-        const eased = progress < 0.5
-          ? 4 * progress * progress * progress
-          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        // Ease-out exponential - fast start, slow approach to target
+        const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
 
         // Animate position from control panel to target
         currentX = animStartX + (animTargetX - animStartX) * eased;
@@ -692,20 +690,20 @@
       ctx.fill();
       ctx.restore();
 
-      // Thin bright ring - the main visible edge
+      // Soft diffuse ring - gentle glow at the edge
       ctx.save();
       const ringGlow = ctx.createRadialGradient(
-        currentX, currentY, displayRadius * 0.98,
-        currentX, currentY, displayRadius * 1.04
+        currentX, currentY, displayRadius * 0.92,
+        currentX, currentY, displayRadius * 1.12
       );
       ringGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      ringGlow.addColorStop(0.3, `rgba(255, 255, 255, ${0.25 * pulse * spotlightOpacity})`);
-      ringGlow.addColorStop(0.5, `rgba(255, 255, 255, ${0.4 * pulse * spotlightOpacity})`);
-      ringGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.25 * pulse * spotlightOpacity})`);
+      ringGlow.addColorStop(0.3, `rgba(255, 255, 255, ${0.08 * pulse * spotlightOpacity})`);
+      ringGlow.addColorStop(0.5, `rgba(255, 255, 255, ${0.15 * pulse * spotlightOpacity})`);
+      ringGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.08 * pulse * spotlightOpacity})`);
       ringGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
       ctx.beginPath();
-      ctx.arc(currentX, currentY, displayRadius * 1.04, 0, 2 * Math.PI);
+      ctx.arc(currentX, currentY, displayRadius * 1.12, 0, 2 * Math.PI);
       ctx.fillStyle = ringGlow;
       ctx.fill();
       ctx.restore();
@@ -1039,9 +1037,9 @@
 
           // Check if click happened while in tutorial mode - advance to next step
           if (tutorialMode && fixedSpotlightX !== null && fixedSpotlightY !== null) {
-            // Debounce: ignore clicks within 1.5 seconds of last target click
+            // Debounce: ignore clicks within 200ms of last target click (prevent double-fire)
             const now = Date.now();
-            if ((now - lastTargetClickTime) > 1500) {
+            if ((now - lastTargetClickTime) > 200) {
               lastTargetClickTime = now;
               console.log('Click detected in tutorial mode, advancing to next step...');
               logEvent('TARGET_CLICK', { x: event.position.x, y: event.position.y });
