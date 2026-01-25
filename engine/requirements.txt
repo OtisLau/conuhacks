@@ -1,0 +1,19 @@
+# CONU Engine Dependencies
+
+# Core
+pillow>=10.0.0
+pytesseract>=0.3.10
+python-dotenv>=1.0.0
+
+# Gemini AI
+google-generativeai>=0.3.0
+
+# Modal (for OmniParser GPU inference)
+modal>=0.56.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Optional: for faster image operations
+# numpy>=1.24.0
