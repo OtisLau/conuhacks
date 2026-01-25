@@ -410,11 +410,6 @@
     <div style="color: #00ff00; font-weight: bold; margin-bottom: 8px;">MOUSE EVENT LOG</div>
   </div>
 
-  <!-- Scroll Indicator -->
-  <div class="scroll-indicator" id="scrollIndicator">
-    <img src="down-arrow-backup-2-svgrepo-com.svg" alt="Scroll Down" class="scroll-arrow-svg" />
-  </div>
-
   <script>
     const canvas = document.getElementById('overlay-canvas');
     const ctx = canvas.getContext('2d');
@@ -522,7 +517,17 @@
     let fixedSpotlightX = null;
     let fixedSpotlightY = null;
     let spotlightRadius = defaultCircleRadius; // Dynamic radius based on bbox
+    let targetSpotlightRadius = defaultCircleRadius; // Target radius for animation
+    let spotlightAnimationStart = 0; // Animation start time
+    let spotlightAnimating = false;
+    const SPOTLIGHT_ANIMATION_DURATION = 400; // ms for zoom-in animation
     let lastTargetClickTime = 0; // Debounce target clicks
+
+    // Fade-out animation state
+    let spotlightFadingOut = false;
+    let spotlightFadeStart = 0;
+    let spotlightOpacity = 1;
+    const SPOTLIGHT_FADE_DURATION = 300; // ms for fade-out
 
     // Draw border to show overlay bounds
     function drawBorder() {
@@ -536,6 +541,24 @@
     // Draw spotlight circle - ONLY when in tutorial mode with a target
     let lastSpotlightLog = 0;
     function drawSpotlightCircle() {
+      // Handle fade-out animation
+      if (spotlightFadingOut) {
+        const elapsed = Date.now() - spotlightFadeStart;
+        const progress = Math.min(elapsed / SPOTLIGHT_FADE_DURATION, 1);
+        // Ease out for smooth fade
+        spotlightOpacity = 1 - progress;
+
+        if (progress >= 1) {
+          // Fade complete, fully clear spotlight
+          spotlightFadingOut = false;
+          tutorialMode = false;
+          fixedSpotlightX = null;
+          fixedSpotlightY = null;
+          spotlightOpacity = 1;
+          return;
+        }
+      }
+
       // Only draw if we're in tutorial mode with a valid target position
       if (!tutorialMode || fixedSpotlightX === null || fixedSpotlightY === null) {
         return; // Don't draw anything
@@ -546,18 +569,81 @@
       }
 
       const dpr = window.devicePixelRatio || 1;
-      const physicalRadius = spotlightRadius;
+
+      // Animate spotlight radius (zoom-in effect)
+      let currentRadius = spotlightRadius;
+      if (spotlightAnimating) {
+        const elapsed = Date.now() - spotlightAnimationStart;
+        const progress = Math.min(elapsed / SPOTLIGHT_ANIMATION_DURATION, 1);
+        // Ease out cubic for smooth deceleration
+        const eased = 1 - Math.pow(1 - progress, 3);
+        // Start from 3x the target radius and narrow down
+        const startRadius = targetSpotlightRadius * 3;
+        currentRadius = startRadius + (targetSpotlightRadius - startRadius) * eased;
+
+        if (progress >= 1) {
+          spotlightAnimating = false;
+          spotlightRadius = targetSpotlightRadius;
+          currentRadius = targetSpotlightRadius;
+        }
+      }
+
+      // Make radius 15% bigger
+      const displayRadius = currentRadius * 1.15;
+      const featherSize = displayRadius * 0.3; // Soft edge feather amount
+
+      // Draw dimmed overlay with soft feathered spotlight cutout
+      ctx.save();
+
+      // First fill the entire canvas with the dim color
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.65 * spotlightOpacity})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Now cut out the spotlight with a soft gradient edge
+      ctx.globalCompositeOperation = 'destination-out';
+
+      // Create radial gradient for soft edges
+      const gradient = ctx.createRadialGradient(
+        fixedSpotlightX, fixedSpotlightY, displayRadius - featherSize,
+        fixedSpotlightX, fixedSpotlightY, displayRadius + featherSize
+      );
+      gradient.addColorStop(0, 'rgba(0, 0, 0, 1)'); // Fully transparent center
+      gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)'); // Soft transition
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Blend to overlay
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, physicalRadius, 0, 2 * Math.PI);
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius + featherSize, 0, 2 * Math.PI);
+      ctx.fillStyle = gradient;
+      ctx.fill();
 
-      // Green pulsing glow when highlighting target
+      ctx.restore();
+
+      // Add subtle inner glow (light glow inside the spotlight)
+      ctx.save();
+      const innerGlowGradient = ctx.createRadialGradient(
+        fixedSpotlightX, fixedSpotlightY, 0,
+        fixedSpotlightX, fixedSpotlightY, displayRadius
+      );
+      innerGlowGradient.addColorStop(0, `rgba(255, 255, 255, ${0.08 * spotlightOpacity})`);
+      innerGlowGradient.addColorStop(0.7, `rgba(255, 255, 255, ${0.03 * spotlightOpacity})`);
+      innerGlowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+      ctx.beginPath();
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = innerGlowGradient;
+      ctx.fill();
+      ctx.restore();
+
+      // Draw spotlight ring with white/gray pulsing glow
+      ctx.beginPath();
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius, 0, 2 * Math.PI);
+
       const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
-      ctx.strokeStyle = `rgba(0, 255, 0, ${pulse})`;
-      ctx.shadowColor = `rgba(0, 255, 0, ${pulse})`;
-      ctx.shadowBlur = (15 + Math.sin(Date.now() / 200) * 5) * dpr;
+      ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * spotlightOpacity * 0.7})`;
+      ctx.shadowColor = `rgba(255, 255, 255, ${pulse * 0.6 * spotlightOpacity})`;
+      ctx.shadowBlur = (25 + Math.sin(Date.now() / 200) * 10) * dpr;
 
-      ctx.lineWidth = 3 * dpr;
+      ctx.lineWidth = 1.5 * dpr;
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
@@ -782,22 +868,33 @@
               const bboxHeight = Math.abs(y2 - y1);
               // Use the larger dimension + padding for circle radius, with minimum
               const calcRadius = Math.max(bboxWidth, bboxHeight) / 2 + 20;
-              spotlightRadius = Math.max(calcRadius, 50); // Minimum 50px radius
-              console.log('Bbox:', data.bbox, 'Size:', bboxWidth, 'x', bboxHeight, 'Radius:', spotlightRadius);
+              targetSpotlightRadius = Math.max(calcRadius, 50); // Minimum 50px radius
+              console.log('Bbox:', data.bbox, 'Size:', bboxWidth, 'x', bboxHeight, 'Target Radius:', targetSpotlightRadius);
             } else {
               // Fallback to default radius scaled for Retina
-              spotlightRadius = defaultCircleRadius * dpr;
-              console.log('No bbox, using default radius:', spotlightRadius);
+              targetSpotlightRadius = defaultCircleRadius * dpr;
+              console.log('No bbox, using default radius:', targetSpotlightRadius);
             }
 
-            console.log('Tutorial mode: ON, spotlight at', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
+            // Start zoom-in animation
+            spotlightAnimating = true;
+            spotlightAnimationStart = Date.now();
+            spotlightRadius = targetSpotlightRadius * 3; // Start large
+
+            console.log('Tutorial mode: ON, spotlight at', fixedSpotlightX, fixedSpotlightY, 'animating to radius:', targetSpotlightRadius);
           } else {
-            // Return to mouse-following mode
-            tutorialMode = false;
-            fixedSpotlightX = null;
-            fixedSpotlightY = null;
-            spotlightRadius = defaultCircleRadius * dpr;
-            console.log('Tutorial mode: OFF, following mouse');
+            // Start fade-out animation instead of instant clear
+            if (tutorialMode && !spotlightFadingOut) {
+              spotlightFadingOut = true;
+              spotlightFadeStart = Date.now();
+              spotlightAnimating = false;
+              console.log('Tutorial mode: fading out...');
+            } else if (!tutorialMode) {
+              // Already off, just reset
+              spotlightRadius = defaultCircleRadius * dpr;
+              targetSpotlightRadius = defaultCircleRadius * dpr;
+              console.log('Tutorial mode: already OFF');
+            }
           }
         });
       } else {
@@ -1007,6 +1104,11 @@
     function updateUIForState(state) {
       let placeholderText = '';
 
+      // Stop loading animation when we have an actual state to show
+      if (state.mode === 'highlighting' || state.mode === 'complete' || state.mode === 'error') {
+        stopLoadingAnimation();
+      }
+
       switch (state.mode) {
         case 'idle':
           promptInput.disabled = false;
@@ -1117,44 +1219,6 @@
     //     window.electronAPI.send('set-click-through', !clickCaptureMode);
     //   }
     // });
-
-    // Listen for tutorial state changes
-    if (window.electronAPI) {
-      window.electronAPI.onTutorialStateChange((state) => {
-        console.log('Tutorial state changed:', state);
-        tutorialState = state; // Store the state
-        updateUIForState(state);
-      });
-
-      // Listen for spotlight position updates to draw circles
-      window.electronAPI.onSetSpotlightPosition((coords) => {
-        console.log('Spotlight position received:', coords);
-        if (coords && coords.x !== undefined && coords.y !== undefined) {
-          // Enable tutorial mode and set circle position
-          tutorialMode = true;
-          fixedSpotlightX = coords.x;
-          fixedSpotlightY = coords.y;
-
-          // Calculate radius from bbox if available
-          if (coords.bbox) {
-            const [x1, y1, x2, y2] = coords.bbox;
-            const w = x2 - x1;
-            const h = y2 - y1;
-            // Use the larger dimension to ensure the circle encompasses the element
-            spotlightRadius = Math.max(w, h) / 2 + 10; // Add padding
-          } else {
-            spotlightRadius = defaultCircleRadius;
-          }
-
-          console.log('Set spotlight circle at:', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
-        } else {
-          // Clear spotlight
-          tutorialMode = false;
-          fixedSpotlightX = null;
-          fixedSpotlightY = null;
-        }
-      });
-    }
 
     // Start animation loop to show border
     animate();
