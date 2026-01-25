@@ -31,7 +31,6 @@
       top: 20px; /* Top right */
       right: 20px; /* Top right */
       left: auto; /* Remove left positioning */
-      transform: none; /* Remove transform */
       width: 350px; /* Smaller width */
       height: 40px; /* Smaller height */
       background: linear-gradient(to right, #2a2a2a, #252525); /* More subtle gradient */
@@ -50,6 +49,7 @@
     }
 
     .control-panel.loading-ball {
+      right: 165px; /* Center of original bar: 20px + (350px/2 - 60px/2) = 165px */
       width: 60px;
       height: 60px;
       border-radius: 50%;
@@ -57,6 +57,7 @@
     }
 
     .control-panel.loading-text {
+      right: 20px; /* Back to original position */
       width: 350px;
       height: 40px;
       border-radius: 20px;
