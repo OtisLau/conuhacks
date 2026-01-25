@@ -540,7 +540,14 @@
     let targetSpotlightRadius = defaultCircleRadius; // Target radius for animation
     let spotlightAnimationStart = 0; // Animation start time
     let spotlightAnimating = false;
-    const SPOTLIGHT_ANIMATION_DURATION = 400; // ms for zoom-in animation
+    const SPOTLIGHT_ANIMATION_DURATION = 500; // ms for fly-out animation
+
+    // Animation start/end positions (for fly-out from control panel)
+    let animStartX = 0;
+    let animStartY = 0;
+    let animTargetX = 0;
+    let animTargetY = 0;
+    const ANIM_START_RADIUS = 30; // Start small from control panel
     let lastTargetClickTime = 0; // Debounce target clicks
 
     // Fade-out animation state
@@ -590,21 +597,32 @@
 
       const dpr = window.devicePixelRatio || 1;
 
-      // Animate spotlight radius (zoom-in effect)
+      // Animate spotlight position and radius (fly-out from control panel)
       let currentRadius = spotlightRadius;
+      let currentX = fixedSpotlightX;
+      let currentY = fixedSpotlightY;
+
       if (spotlightAnimating) {
         const elapsed = Date.now() - spotlightAnimationStart;
         const progress = Math.min(elapsed / SPOTLIGHT_ANIMATION_DURATION, 1);
-        // Ease out cubic for smooth deceleration
-        const eased = 1 - Math.pow(1 - progress, 3);
-        // Start from 3x the target radius and narrow down
-        const startRadius = targetSpotlightRadius * 3;
-        currentRadius = startRadius + (targetSpotlightRadius - startRadius) * eased;
+        // Ease-in-out cubic for smooth acceleration and deceleration
+        const eased = progress < 0.5
+          ? 4 * progress * progress * progress
+          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+        // Animate position from control panel to target
+        currentX = animStartX + (animTargetX - animStartX) * eased;
+        currentY = animStartY + (animTargetY - animStartY) * eased;
+
+        // Animate radius from small to target
+        currentRadius = ANIM_START_RADIUS + (targetSpotlightRadius - ANIM_START_RADIUS) * eased;
 
         if (progress >= 1) {
           spotlightAnimating = false;
           spotlightRadius = targetSpotlightRadius;
           currentRadius = targetSpotlightRadius;
+          currentX = animTargetX;
+          currentY = animTargetY;
         }
       }
 
@@ -624,15 +642,15 @@
 
       // Create radial gradient for soft edges
       const gradient = ctx.createRadialGradient(
-        fixedSpotlightX, fixedSpotlightY, displayRadius - featherSize,
-        fixedSpotlightX, fixedSpotlightY, displayRadius + featherSize
+        currentX, currentY, displayRadius - featherSize,
+        currentX, currentY, displayRadius + featherSize
       );
       gradient.addColorStop(0, 'rgba(0, 0, 0, 1)'); // Fully transparent center
       gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)'); // Soft transition
       gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Blend to overlay
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius + featherSize, 0, 2 * Math.PI);
+      ctx.arc(currentX, currentY, displayRadius + featherSize, 0, 2 * Math.PI);
       ctx.fillStyle = gradient;
       ctx.fill();
 
@@ -641,15 +659,15 @@
       // Add subtle inner glow (light glow inside the spotlight)
       ctx.save();
       const innerGlowGradient = ctx.createRadialGradient(
-        fixedSpotlightX, fixedSpotlightY, 0,
-        fixedSpotlightX, fixedSpotlightY, displayRadius
+        currentX, currentY, 0,
+        currentX, currentY, displayRadius
       );
       innerGlowGradient.addColorStop(0, `rgba(255, 255, 255, ${0.08 * spotlightOpacity})`);
       innerGlowGradient.addColorStop(0.7, `rgba(255, 255, 255, ${0.03 * spotlightOpacity})`);
       innerGlowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius, 0, 2 * Math.PI);
+      ctx.arc(currentX, currentY, displayRadius, 0, 2 * Math.PI);
       ctx.fillStyle = innerGlowGradient;
       ctx.fill();
       ctx.restore();
@@ -660,8 +678,8 @@
       // Soft outer glow - very subtle
       ctx.save();
       const outerGlow = ctx.createRadialGradient(
-        fixedSpotlightX, fixedSpotlightY, displayRadius * 0.95,
-        fixedSpotlightX, fixedSpotlightY, displayRadius * 1.12
+        currentX, currentY, displayRadius * 0.95,
+        currentX, currentY, displayRadius * 1.12
       );
       outerGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
       outerGlow.addColorStop(0.4, `rgba(255, 255, 255, ${0.12 * pulse * spotlightOpacity})`);
@@ -669,7 +687,7 @@
       outerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius * 1.12, 0, 2 * Math.PI);
+      ctx.arc(currentX, currentY, displayRadius * 1.12, 0, 2 * Math.PI);
       ctx.fillStyle = outerGlow;
       ctx.fill();
       ctx.restore();
@@ -677,8 +695,8 @@
       // Thin bright ring - the main visible edge
       ctx.save();
       const ringGlow = ctx.createRadialGradient(
-        fixedSpotlightX, fixedSpotlightY, displayRadius * 0.98,
-        fixedSpotlightX, fixedSpotlightY, displayRadius * 1.04
+        currentX, currentY, displayRadius * 0.98,
+        currentX, currentY, displayRadius * 1.04
       );
       ringGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
       ringGlow.addColorStop(0.3, `rgba(255, 255, 255, ${0.25 * pulse * spotlightOpacity})`);
@@ -687,7 +705,7 @@
       ringGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius * 1.04, 0, 2 * Math.PI);
+      ctx.arc(currentX, currentY, displayRadius * 1.04, 0, 2 * Math.PI);
       ctx.fillStyle = ringGlow;
       ctx.fill();
       ctx.restore();
@@ -921,12 +939,23 @@
               console.log('No bbox, using default radius:', targetSpotlightRadius);
             }
 
-            // Start zoom-in animation
+            // Calculate control panel center (start position for fly-out animation)
+            // Control panel: top: 20px, right: 20px, width: 420px, height: 60px
+            const controlPanelCenterX = (window.innerWidth - 20 - 210) * dpr; // right edge - margin - half width
+            const controlPanelCenterY = (20 + 30) * dpr; // top margin + half height
+
+            // Set animation start (from control panel) and target positions
+            animStartX = controlPanelCenterX;
+            animStartY = controlPanelCenterY;
+            animTargetX = data.x;
+            animTargetY = data.y;
+
+            // Start fly-out animation
             spotlightAnimating = true;
             spotlightAnimationStart = Date.now();
-            spotlightRadius = targetSpotlightRadius * 3; // Start large
+            spotlightRadius = ANIM_START_RADIUS; // Start small
 
-            console.log('Tutorial mode: ON, spotlight at', fixedSpotlightX, fixedSpotlightY, 'animating to radius:', targetSpotlightRadius);
+            console.log('Tutorial mode: ON, flying from', animStartX, animStartY, 'to', animTargetX, animTargetY, 'radius:', targetSpotlightRadius);
           } else {
             // Start fade-out animation instead of instant clear
             if (tutorialMode && !spotlightFadingOut) {
