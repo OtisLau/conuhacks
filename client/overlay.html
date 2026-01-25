@@ -15,7 +15,7 @@
     body {
       overflow: hidden;
       background: transparent;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
     }
 
     canvas {
@@ -30,26 +30,29 @@
     .control-panel {
       position: absolute;
       top: 20px;
-      /* Top right */
       right: 20px;
-      /* Top right */
       left: auto;
-      /* Remove left positioning */
       width: 420px;
-      /* Bigger width */
-      /* Bigger width */
       height: 60px;
-      /* Bigger height */
-      /* Liquid glass effect */
-      background: rgba(28, 28, 30, 0.85);
-      /* Less clear/more opaque */
-      backdrop-filter: blur(20px) saturate(180%);
+      /* Glass effect with gradient for depth */
+      background: linear-gradient(
+        145deg,
+        rgba(50, 50, 55, 0.75) 0%,
+        rgba(35, 35, 40, 0.8) 100%
+      );
+      backdrop-filter: blur(40px) saturate(150%);
+      -webkit-backdrop-filter: blur(40px) saturate(150%);
       border-radius: 30px;
-      /* Pill-shaped (half of height) */
-      border: 0.5px solid rgba(255, 255, 255, 0.15);
-      /* Even thinner/more transparent line */
-      box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3);
-      /* Darker shadow for depth */
+      /* Light top edge, darker bottom for 3D pop */
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+      /* Layered shadows for popped-out effect */
+      box-shadow:
+        0 10px 40px rgba(0, 0, 0, 0.4),
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
       z-index: 2;
       pointer-events: auto;
       padding: 0;
@@ -58,7 +61,6 @@
       align-items: center;
       justify-content: center;
       transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
-      /* Smoother easing */
     }
 
     /* Sheen effect */
@@ -147,12 +149,14 @@
       /* Normal line height for multiline */
       background: transparent;
       border: none;
-      color: white;
+      color: rgba(255, 255, 255, 0.85);
       font-size: 16px;
+      font-weight: 300;
+      letter-spacing: 0.3px;
       /* Slightly smaller font */
       resize: none;
       outline: none;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
       padding: 20px 25px 20px 25px;
       /* Vertical padding 20px for centering (60px height - 20px line height) / 2 */
       text-align: left;
@@ -202,10 +206,9 @@
 
 
     textarea::placeholder {
-      color: rgba(255, 255, 255, 0.8);
-      /* Much brighter placeholder */
-      font-weight: 400;
-      /* Slightly heavier font weight */
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 300;
+      letter-spacing: 0.3px;
     }
 
     /* Mouse event log - hidden for now */
@@ -430,48 +433,50 @@
         return;
       }
 
+      let finalHeight = DEFAULT_HEIGHT;
+
       // If empty, use default height
       if (!promptInput.value || promptInput.value.trim() === '') {
         controlPanel.style.height = DEFAULT_HEIGHT + 'px';
         promptInput.style.height = DEFAULT_HEIGHT + 'px';
-        controlPanel.style.borderRadius = '20px';
-        return;
-      }
-
-      // First check at current/default height if content is overflowing
-      const currentHeight = parseInt(promptInput.style.height) || DEFAULT_HEIGHT;
-
-      // Check if scrollHeight exceeds current height (content is cut off)
-      const isOverflowing = promptInput.scrollHeight > currentHeight;
-
-      if (isOverflowing) {
-        // Content needs more space, measure actual requirement
-        promptInput.style.height = 'auto';
-        const scrollHeight = promptInput.scrollHeight;
-        const requiredHeight = Math.min(scrollHeight, MAX_HEIGHT);
-
-        controlPanel.style.height = requiredHeight + 'px';
-        promptInput.style.height = requiredHeight + 'px';
       } else {
-        // Content might fit in a smaller height, try default
-        promptInput.style.height = DEFAULT_HEIGHT + 'px';
+        // First check at current/default height if content is overflowing
+        const currentHeight = parseInt(promptInput.style.height) || DEFAULT_HEIGHT;
 
-        // Check if it still fits
-        if (promptInput.scrollHeight <= DEFAULT_HEIGHT) {
-          // Fits in default, use it
-          controlPanel.style.height = DEFAULT_HEIGHT + 'px';
-        } else {
-          // Doesn't fit in default, measure actual requirement
+        // Check if scrollHeight exceeds current height (content is cut off)
+        const isOverflowing = promptInput.scrollHeight > currentHeight;
+
+        if (isOverflowing) {
+          // Content needs more space, measure actual requirement
           promptInput.style.height = 'auto';
           const scrollHeight = promptInput.scrollHeight;
-          const requiredHeight = Math.min(scrollHeight, MAX_HEIGHT);
+          finalHeight = Math.min(scrollHeight, MAX_HEIGHT);
 
-          controlPanel.style.height = requiredHeight + 'px';
-          promptInput.style.height = requiredHeight + 'px';
+          controlPanel.style.height = finalHeight + 'px';
+          promptInput.style.height = finalHeight + 'px';
+        } else {
+          // Content might fit in a smaller height, try default
+          promptInput.style.height = DEFAULT_HEIGHT + 'px';
+
+          // Check if it still fits
+          if (promptInput.scrollHeight <= DEFAULT_HEIGHT) {
+            // Fits in default, use it
+            controlPanel.style.height = DEFAULT_HEIGHT + 'px';
+            finalHeight = DEFAULT_HEIGHT;
+          } else {
+            // Doesn't fit in default, measure actual requirement
+            promptInput.style.height = 'auto';
+            const scrollHeight = promptInput.scrollHeight;
+            finalHeight = Math.min(scrollHeight, MAX_HEIGHT);
+
+            controlPanel.style.height = finalHeight + 'px';
+            promptInput.style.height = finalHeight + 'px';
+          }
         }
       }
 
-      controlPanel.style.borderRadius = '30px';
+      // Always use pill shape - border-radius = half the height
+      controlPanel.style.borderRadius = (finalHeight / 2) + 'px';
     }
 
     // Set initial height explicitly
@@ -1177,33 +1182,37 @@
 
     // Adjust height based on placeholder text length
     function adjustHeightForPlaceholder(text) {
+      let finalHeight = DEFAULT_HEIGHT;
+
       if (!text) {
         controlPanel.style.height = DEFAULT_HEIGHT + 'px';
         promptInput.style.height = DEFAULT_HEIGHT + 'px';
-        return;
+      } else {
+        // Create temporary element to measure text height
+        const temp = document.createElement('div');
+        temp.style.position = 'absolute';
+        temp.style.visibility = 'hidden';
+        temp.style.width = (420 - 50) + 'px'; // Control panel width minus horizontal padding (25px each side)
+        temp.style.fontSize = '16px';
+        temp.style.lineHeight = '20px';
+        temp.style.fontFamily = '"SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif';
+        temp.style.whiteSpace = 'pre-wrap';
+        temp.style.wordWrap = 'break-word';
+        temp.textContent = text;
+        document.body.appendChild(temp);
+
+        const textHeight = temp.offsetHeight;
+        document.body.removeChild(temp);
+
+        // Calculate required height with padding (20px top + 20px bottom = 40px)
+        finalHeight = Math.min(Math.max(textHeight + PADDING_VERTICAL, DEFAULT_HEIGHT), MAX_HEIGHT);
+
+        controlPanel.style.height = finalHeight + 'px';
+        promptInput.style.height = finalHeight + 'px';
       }
 
-      // Create temporary element to measure text height
-      const temp = document.createElement('div');
-      temp.style.position = 'absolute';
-      temp.style.visibility = 'hidden';
-      temp.style.width = (420 - 35) + 'px'; // Control panel width minus padding
-      temp.style.fontSize = '16px';
-      temp.style.lineHeight = '20px';
-      temp.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif';
-      temp.style.whiteSpace = 'pre-wrap';
-      temp.style.wordWrap = 'break-word';
-      temp.textContent = text;
-      document.body.appendChild(temp);
-
-      const textHeight = temp.offsetHeight;
-      document.body.removeChild(temp);
-
-      // Calculate required height with padding
-      const requiredHeight = Math.min(Math.max(textHeight + 20, DEFAULT_HEIGHT), MAX_HEIGHT);
-
-      controlPanel.style.height = requiredHeight + 'px';
-      promptInput.style.height = requiredHeight + 'px';
+      // Always use pill shape - border-radius = half the height
+      controlPanel.style.borderRadius = (finalHeight / 2) + 'px';
     }
 
 
