@@ -331,10 +331,6 @@
     <div style="color: #00ff00; font-weight: bold; margin-bottom: 8px;">MOUSE EVENT LOG</div>
   </div>
 
-  <!-- Scroll Indicator -->
-  <div class="scroll-indicator" id="scrollIndicator">
-    <img src="down-arrow-backup-2-svgrepo-com.svg" alt="Scroll Down" class="scroll-arrow-svg" />
-  </div>
 
   <script>
     const canvas = document.getElementById('overlay-canvas');
@@ -445,6 +441,11 @@
     let spotlightRadius = defaultCircleRadius; // Dynamic radius based on bbox
     let lastTargetClickTime = 0; // Debounce target clicks
 
+    // Spotlight fade animation
+    let spotlightOpacity = 0; // Current opacity (0-1)
+    let targetSpotlightOpacity = 0; // Target opacity (0 or 1)
+    const FADE_SPEED = 0.08; // How fast to fade (higher = faster)
+
     // Draw border to show overlay bounds
     function drawBorder() {
       ctx.strokeStyle = 'rgba(142, 142, 147, 0.3)';
@@ -454,33 +455,73 @@
       ctx.setLineDash([]);
     }
 
-    // Draw spotlight circle - ONLY when in tutorial mode with a target
+    // Draw spotlight circle - with fade animation
     let lastSpotlightLog = 0;
     function drawSpotlightCircle() {
-      // Only draw if we're in tutorial mode with a valid target position
-      if (!tutorialMode || fixedSpotlightX === null || fixedSpotlightY === null) {
-        return; // Don't draw anything
+      // Animate opacity towards target
+      if (spotlightOpacity < targetSpotlightOpacity) {
+        spotlightOpacity = Math.min(spotlightOpacity + FADE_SPEED, targetSpotlightOpacity);
+      } else if (spotlightOpacity > targetSpotlightOpacity) {
+        spotlightOpacity = Math.max(spotlightOpacity - FADE_SPEED, targetSpotlightOpacity);
       }
+
+      // Don't draw if fully faded out
+      if (spotlightOpacity <= 0) {
+        return;
+      }
+
+      // Need valid position to draw
+      if (fixedSpotlightX === null || fixedSpotlightY === null) {
+        return;
+      }
+
       if (Date.now() - lastSpotlightLog > 1000) {
-        console.log('Drawing spotlight at:', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
+        console.log('Drawing spotlight at:', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius, 'opacity:', spotlightOpacity.toFixed(2));
         lastSpotlightLog = Date.now();
       }
 
       const dpr = window.devicePixelRatio || 1;
-      const physicalRadius = spotlightRadius;
+      const physicalRadius = spotlightRadius * 2.1; // Circle size
+      const fadeSize = 30 * dpr; // Smaller fade = sharper edge
+
+      // Draw dark overlay with animated opacity (65% opacity)
+      const overlayOpacity = 0.65 * spotlightOpacity;
+      ctx.fillStyle = `rgba(0, 0, 0, ${overlayOpacity})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Create radial gradient for spotlight hole with sharper edges
+      const gradient = ctx.createRadialGradient(
+        fixedSpotlightX, fixedSpotlightY, Math.max(0, physicalRadius - fadeSize),  // Inner circle (fully transparent)
+        fixedSpotlightX, fixedSpotlightY, physicalRadius + fadeSize   // Outer circle (fades to overlay)
+      );
+      gradient.addColorStop(0, `rgba(0, 0, 0, ${spotlightOpacity})`);     // Fully cut out center
+      gradient.addColorStop(0.85, `rgba(0, 0, 0, ${0.9 * spotlightOpacity})`); // Sharp transition
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');     // Blend into overlay
+
+      // Use destination-out to cut the spotlight hole
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, physicalRadius + fadeSize, 0, 2 * Math.PI);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Reset composite operation
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Draw very subtle warm halo glow around spotlight edge
+      const haloGradient = ctx.createRadialGradient(
+        fixedSpotlightX, fixedSpotlightY, physicalRadius - 5,
+        fixedSpotlightX, fixedSpotlightY, physicalRadius + 35 * dpr
+      );
+      haloGradient.addColorStop(0, `rgba(255, 252, 245, 0)`);
+      haloGradient.addColorStop(0.5, `rgba(255, 248, 235, ${0.1 * spotlightOpacity})`);
+      haloGradient.addColorStop(0.8, `rgba(255, 245, 225, ${0.06 * spotlightOpacity})`);
+      haloGradient.addColorStop(1, `rgba(255, 240, 220, 0)`);
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, physicalRadius, 0, 2 * Math.PI);
-
-      // Green pulsing glow when highlighting target
-      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
-      ctx.strokeStyle = `rgba(0, 255, 0, ${pulse})`;
-      ctx.shadowColor = `rgba(0, 255, 0, ${pulse})`;
-      ctx.shadowBlur = (15 + Math.sin(Date.now() / 200) * 5) * dpr;
-
-      ctx.lineWidth = 3 * dpr;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, physicalRadius + 50 * dpr, 0, 2 * Math.PI);
+      ctx.fillStyle = haloGradient;
+      ctx.fill();
     }
 
     function drawHighlight(bbox, instruction) {
@@ -689,14 +730,15 @@
               console.log('No bbox, using default radius:', spotlightRadius);
             }
 
+            // Fade in the spotlight
+            targetSpotlightOpacity = 1;
             console.log('Tutorial mode: ON, spotlight at', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
           } else {
-            // Return to mouse-following mode
+            // Fade out the spotlight
+            targetSpotlightOpacity = 0;
             tutorialMode = false;
-            fixedSpotlightX = null;
-            fixedSpotlightY = null;
-            spotlightRadius = defaultCircleRadius * dpr;
-            console.log('Tutorial mode: OFF, following mouse');
+            // Keep position until fade completes (cleared in animation when opacity hits 0)
+            console.log('Tutorial mode: OFF, fading out');
           }
         });
       } else {
@@ -931,14 +973,17 @@
         case 'complete':
           promptInput.disabled = false;
           placeholderText = 'Done! Type next command...';
+          // Fade out spotlight
+          targetSpotlightOpacity = 0;
           tutorialMode = false;
-          fixedSpotlightX = null;
-          fixedSpotlightY = null;
           logEvent('TUTORIAL', { message: 'Tutorial completed!' });
           break;
         case 'error':
           promptInput.disabled = false;
           placeholderText = 'Type your command...';
+          // Fade out spotlight on error
+          targetSpotlightOpacity = 0;
+          tutorialMode = false;
           if (state.error) {
             logEvent('ERROR', { message: state.error });
           }
@@ -1004,34 +1049,7 @@
         updateUIForState(state);
       });
 
-      // Listen for spotlight position updates to draw circles
-      window.electronAPI.onSetSpotlightPosition((coords) => {
-        console.log('Spotlight position received:', coords);
-        if (coords && coords.x !== undefined && coords.y !== undefined) {
-          // Enable tutorial mode and set circle position
-          tutorialMode = true;
-          fixedSpotlightX = coords.x;
-          fixedSpotlightY = coords.y;
-
-          // Calculate radius from bbox if available
-          if (coords.bbox) {
-            const [x1, y1, x2, y2] = coords.bbox;
-            const w = x2 - x1;
-            const h = y2 - y1;
-            // Use the larger dimension to ensure the circle encompasses the element
-            spotlightRadius = Math.max(w, h) / 2 + 10; // Add padding
-          } else {
-            spotlightRadius = defaultCircleRadius;
-          }
-
-          console.log('Set spotlight circle at:', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
-        } else {
-          // Clear spotlight
-          tutorialMode = false;
-          fixedSpotlightX = null;
-          fixedSpotlightY = null;
-        }
-      });
+      // Note: spotlight position listener is already set up above with fade animation
     }
 
     // Start animation loop to show border

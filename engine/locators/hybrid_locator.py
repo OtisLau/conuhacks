@@ -277,6 +277,7 @@ class HybridLocator(BaseLocator):
         raise_on_not_found: bool = False,
         instruction: str = "",
         quad: Optional[int] = None,
+        skip_verification: bool = False,
         **kwargs,
     ) -> LocatorResult:
         """
@@ -290,6 +291,7 @@ class HybridLocator(BaseLocator):
             raise_on_not_found: Raise ElementNotFoundError if not found
             instruction: Full instruction for context (used for verification)
             quad: For icons, which quadrant to search (1-4)
+            skip_verification: If True, skip Gemini verification for speed
 
         Returns:
             LocatorResult with found status and coordinates
@@ -340,22 +342,23 @@ class HybridLocator(BaseLocator):
         if result.found:
             all_matches = getattr(result, 'all_matches', [])
 
-            # Skip Gemini verification for single high-confidence matches (speed optimization)
-            # Only verify when: multiple matches OR single low-confidence match
-            needs_verification = (
-                len(all_matches) > 1 or
-                (len(all_matches) == 1 and all_matches[0].get("confidence", 0) < 85)
-            )
+            # Only verify if not skipped and there's ambiguity
+            if not skip_verification and instruction and all_matches:
+                # Only verify when: multiple matches OR single low-confidence match
+                needs_verification = (
+                    len(all_matches) > 1 or
+                    (len(all_matches) == 1 and all_matches[0].get("confidence", 0) < 85)
+                )
 
-            if needs_verification and instruction and all_matches:
-                best_match = self._pick_best_match(img, all_matches, target, instruction)
-                if best_match is None:
-                    result.found = False
-                    result.suggestions = ["Found text but not in correct context"]
-                else:
-                    result.bbox = best_match["bbox"]
-                    result.element = best_match["text"]
-                    result.confidence = best_match["confidence"]
+                if needs_verification:
+                    best_match = self._pick_best_match(img, all_matches, target, instruction)
+                    if best_match is None:
+                        result.found = False
+                        result.suggestions = ["Found text but not in correct context"]
+                    else:
+                        result.bbox = best_match["bbox"]
+                        result.element = best_match["text"]
+                        result.confidence = best_match["confidence"]
 
             if result.found:
                 result.method = LocatorMethod.HYBRID
@@ -369,21 +372,22 @@ class HybridLocator(BaseLocator):
             if result.found:
                 all_matches = getattr(result, 'all_matches', [])
 
-                # Same optimization: skip verification for single high-confidence matches
-                needs_verification = (
-                    len(all_matches) > 1 or
-                    (len(all_matches) == 1 and all_matches[0].get("confidence", 0) < 85)
-                )
+                # Only verify if not skipped and there's ambiguity
+                if not skip_verification and instruction and all_matches:
+                    needs_verification = (
+                        len(all_matches) > 1 or
+                        (len(all_matches) == 1 and all_matches[0].get("confidence", 0) < 85)
+                    )
 
-                if needs_verification and instruction and all_matches:
-                    best_match = self._pick_best_match(img, all_matches, target, instruction)
-                    if best_match is None:
-                        result.found = False
-                        result.suggestions = ["Found text but not in correct context"]
-                    else:
-                        result.bbox = best_match["bbox"]
-                        result.element = best_match["text"]
-                        result.confidence = best_match["confidence"]
+                    if needs_verification:
+                        best_match = self._pick_best_match(img, all_matches, target, instruction)
+                        if best_match is None:
+                            result.found = False
+                            result.suggestions = ["Found text but not in correct context"]
+                        else:
+                            result.bbox = best_match["bbox"]
+                            result.element = best_match["text"]
+                            result.confidence = best_match["confidence"]
 
                 if result.found:
                     result.method = LocatorMethod.HYBRID

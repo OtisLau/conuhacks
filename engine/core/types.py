@@ -66,6 +66,15 @@ class BoundingBox:
             y2=min(height, self.y2),
         )
 
+    def scale(self, factor: float) -> "BoundingBox":
+        """Scale coordinates by a factor (for converting between resized/original coords)."""
+        return BoundingBox(
+            x1=int(self.x1 * factor),
+            y1=int(self.y1 * factor),
+            x2=int(self.x2 * factor),
+            y2=int(self.y2 * factor),
+        )
+
 
 @dataclass
 class LocatorResult:
