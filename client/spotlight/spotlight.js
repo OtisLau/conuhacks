@@ -15,8 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Fill entire canvas with dark overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    // Fill entire canvas with dark overlay (65% opacity)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Create radial gradient for spotlight hole with soft edges
@@ -37,6 +37,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reset composite operation
     ctx.globalCompositeOperation = 'source-over';
+
+    // Draw very subtle warm halo glow around spotlight edge
+    const haloGradient = ctx.createRadialGradient(
+      mouseX, mouseY, circleRadius - 5,
+      mouseX, mouseY, circleRadius + 35
+    );
+    haloGradient.addColorStop(0, 'rgba(255, 252, 245, 0)');
+    haloGradient.addColorStop(0.5, 'rgba(255, 248, 235, 0.1)');
+    haloGradient.addColorStop(0.8, 'rgba(255, 245, 225, 0.06)');
+    haloGradient.addColorStop(1, 'rgba(255, 240, 220, 0)');
+
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, circleRadius + 40, 0, 2 * Math.PI);
+    ctx.fillStyle = haloGradient;
+    ctx.fill();
   }
 
   // Listen for global mouse move events from main process

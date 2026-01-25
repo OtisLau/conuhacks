@@ -418,8 +418,8 @@
       const physicalRadius = spotlightRadius * 2.1; // Circle size
       const fadeSize = 30 * dpr; // Smaller fade = sharper edge
 
-      // Draw dark overlay with animated opacity (base 20% * current fade = 80% visible)
-      const overlayOpacity = 0.2 * spotlightOpacity;
+      // Draw dark overlay with animated opacity (65% opacity)
+      const overlayOpacity = 0.65 * spotlightOpacity;
       ctx.fillStyle = `rgba(0, 0, 0, ${overlayOpacity})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -441,6 +441,21 @@
 
       // Reset composite operation
       ctx.globalCompositeOperation = 'source-over';
+
+      // Draw very subtle warm halo glow around spotlight edge
+      const haloGradient = ctx.createRadialGradient(
+        fixedSpotlightX, fixedSpotlightY, physicalRadius - 5,
+        fixedSpotlightX, fixedSpotlightY, physicalRadius + 35 * dpr
+      );
+      haloGradient.addColorStop(0, `rgba(255, 252, 245, 0)`);
+      haloGradient.addColorStop(0.5, `rgba(255, 248, 235, ${0.1 * spotlightOpacity})`);
+      haloGradient.addColorStop(0.8, `rgba(255, 245, 225, ${0.06 * spotlightOpacity})`);
+      haloGradient.addColorStop(1, `rgba(255, 240, 220, 0)`);
+
+      ctx.beginPath();
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, physicalRadius + 50 * dpr, 0, 2 * Math.PI);
+      ctx.fillStyle = haloGradient;
+      ctx.fill();
     }
 
     function drawHighlight(bbox, instruction) {

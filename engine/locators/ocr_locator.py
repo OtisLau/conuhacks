@@ -229,6 +229,10 @@ class OCRLocator(BaseLocator):
             # Substring match
             elif target_lower in text_lower:
                 score = 0.95
+            # Reverse substring - target contains the text (e.g., target="Open Discord", text="Discord")
+            elif text_lower in target_lower and len(text_lower) >= 4:
+                # Score based on how much of target is covered
+                score = 0.85 * (len(text_lower) / len(target_lower))
             # Fuzzy match (if enabled)
             elif fuzzy:
                 score = self._fuzzy_match(target, text)
@@ -262,6 +266,37 @@ class OCRLocator(BaseLocator):
             # Attach all matches for verification if needed
             result.all_matches = all_matches
             return result
+
+        # Fallback: try finding key words from multi-word target
+        stop_words = {"the", "a", "an", "to", "in", "on", "at", "for", "of", "and", "or", "click", "tap", "button", "icon"}
+        if target_word_count > 1 and not all_matches:
+            target_words = [w for w in target.lower().split() if w not in stop_words and len(w) >= 3]
+            for word in target_words:
+                for cand in candidates:
+                    text_lower = cand["text"].lower()
+                    # Check if this word matches the candidate
+                    if word == text_lower or self._fuzzy_match(word, text_lower) >= 0.85:
+                        all_matches.append({
+                            "text": cand["text"],
+                            "bbox": cand["bbox"],
+                            "confidence": cand["confidence"],
+                            "match_score": 0.75,  # Lower score for partial word match
+                            "weighted_score": 0.75 * (cand["confidence"] / 100),
+                        })
+
+            if all_matches:
+                all_matches.sort(key=lambda x: x["weighted_score"], reverse=True)
+                best_match = all_matches[0]
+                result = LocatorResult(
+                    found=True,
+                    element=best_match["text"],
+                    bbox=best_match["bbox"],
+                    confidence=best_match["confidence"],
+                    method=LocatorMethod.OCR,
+                    time_ms=(time.time() - start) * 1000,
+                )
+                result.all_matches = all_matches
+                return result
 
         # Not found - get suggestions
         all_text = self._get_all_text(cropped)
