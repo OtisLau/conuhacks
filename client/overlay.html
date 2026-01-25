@@ -186,6 +186,75 @@
         box-shadow: 0 0 10px rgba(142, 142, 147, 0.2);
       }
     }
+
+    .instruction-box {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 400px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px) saturate(180%);
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+      z-index: 3; /* Higher than control-panel */
+      pointer-events: auto;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 15px;
+    }
+
+    .instruction-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .instruction-done-btn {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.2s;
+    }
+    .instruction-done-btn:hover {
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    .instruction-body {
+      flex-grow: 1;
+      font-size: 16px;
+      line-height: 1.5;
+      margin-bottom: 15px;
+    }
+
+    .instruction-footer {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .instruction-nav-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+      width: 48%;
+    }
+    .instruction-nav-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
   </style>
 </head>
 <body>
@@ -208,6 +277,21 @@
       id="promptInput"
       placeholder="Type your command..."
     ></textarea>
+  </div>
+
+  <!-- Instruction Box -->
+  <div class="instruction-box" id="instructionBox" style="display: none;">
+    <div class="instruction-header">
+      <span id="instructionStep">Step 1 of 5</span>
+      <button class="instruction-done-btn" id="instructionDoneBtn">Done</button>
+    </div>
+    <div class="instruction-body">
+      <p id="instructionText">This is a placeholder for the instruction text. I will tell you what to do here.</p>
+    </div>
+    <div class="instruction-footer">
+      <button class="instruction-nav-btn" id="instructionPrevBtn">&lt; Prev</button>
+      <button class="instruction-nav-btn" id="instructionNextBtn">Next &gt;</button>
+    </div>
   </div>
 
   <!-- Mouse Event Log -->
