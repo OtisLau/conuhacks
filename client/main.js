@@ -27,11 +27,11 @@ function forceQuit() {
 
 function createOverlayWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.bounds;
+  const { x, y, width, height } = primaryDisplay.workArea;
 
   overlayWindow = new BrowserWindow({
-    x: 0,
-    y: 0,
+    x,
+    y,
     width,
     height,
     transparent: true,
@@ -64,11 +64,11 @@ function createOverlayWindow() {
 
 function createSpotlightWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.bounds;
+  const { x, y, width, height } = primaryDisplay.workArea;
 
   spotlightWindow = new BrowserWindow({
-    x: 0,
-    y: 0,
+    x,
+    y,
     width,
     height,
     transparent: true,
