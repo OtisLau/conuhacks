@@ -32,7 +32,7 @@
       right: 20px; /* Top right */
       left: auto; /* Remove left positioning */
       transform: none; /* Remove transform */
-      width: 300px; /* Smaller width */
+      width: 350px; /* Smaller width */
       height: 40px; /* Smaller height */
       background: linear-gradient(to right, #2a2a2a, #252525); /* More subtle gradient */
       /* backdrop-filter removed */
@@ -230,16 +230,6 @@
 <body>
   <canvas id="overlay-canvas"></canvas>
 
-
-
-  <!-- Click Capture Toggle -->
-  <div style="position: absolute; top: 70px; right: 20px; z-index: 9999; pointer-events: auto;">
-    <label style="color: #fff; background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; display: inline-block;">
-      <input type="checkbox" id="captureClicksToggle" style="margin-right: 6px;">
-      <span>Capture & Log All Clicks</span>
-    </label>
-  </div>
-
   <!-- Control Panel -->
   <div class="control-panel" id="controlPanel">
     <textarea
@@ -279,7 +269,6 @@
     const controlPanel = document.getElementById('controlPanel');
     const promptInput = document.getElementById('promptInput');
     const eventLog = document.getElementById('eventLog');
-    const captureToggle = document.getElementById('captureClicksToggle');
 
     // Prevent accidental quits on startup
     let quitButtonReady = false;
@@ -287,9 +276,6 @@
       quitButtonReady = true;
       console.log('Quit button is now active');
     }, 1000);
-
-    // Click capture mode
-    let clickCaptureMode = false;
 
     // Set canvas size to screen size
     canvas.width = window.screen.width;
@@ -591,20 +577,6 @@
         logEvent('USER_ACTION', { message: 'Start tutorial: ' + prompt });
         // Optionally, clear the input after submitting
         promptInput.value = '';
-      }
-    });
-
-
-
-    // Click capture toggle - this disables click-through so we can log clicks
-    captureToggle.addEventListener('change', () => {
-      clickCaptureMode = captureToggle.checked;
-      console.log('Click capture mode:', clickCaptureMode);
-      logEvent('SYSTEM', { message: `Click capture mode: ${clickCaptureMode ? 'ON' : 'OFF'}` });
-
-      // When enabled, disable click-through globally to capture all clicks on overlay
-      if (window.electronAPI) {
-        window.electronAPI.send('set-click-through', !clickCaptureMode);
       }
     });
 
