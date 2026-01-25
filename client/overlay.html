@@ -76,6 +76,10 @@
       animation: glow-pulse 2s ease-in-out infinite;
     }
 
+    .control-panel.state-processing {
+      animation: glow-pulse 2s ease-in-out infinite;
+    }
+
     @keyframes pulse-ball {
 
       0%,
@@ -170,10 +174,10 @@
 
 
     textarea::placeholder {
-      color: rgba(255, 255, 255, 0.4);
-      /* Lighter placeholder */
-      font-weight: 300;
-      /* Lighter font weight */
+      color: rgba(255, 255, 255, 0.8);
+      /* Much brighter placeholder */
+      font-weight: 400;
+      /* Slightly heavier font weight */
     }
 
     /* Mouse event log - hidden for now */
@@ -1012,6 +1016,13 @@
             logEvent('ERROR', { message: state.error });
           }
           break;
+      }
+
+      // Toggle glow effect based on state logic
+      if (state.mode === 'planning' || state.mode === 'locating') {
+        controlPanel.classList.add('state-processing');
+      } else {
+        controlPanel.classList.remove('state-processing');
       }
 
       // Stop any existing typewriter on the input
