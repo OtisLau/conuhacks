@@ -35,14 +35,15 @@
       /* Top right */
       left: auto;
       /* Remove left positioning */
-      width: 350px;
-      /* Smaller width */
-      height: 40px;
-      /* Default height */
+      width: 420px;
+      /* Bigger width */
+      height: 50px;
+      /* Bigger height */
       /* Liquid glass effect */
-      background: rgba(28, 28, 30, 0.65);
+      background: rgba(28, 28, 30, 0.85);
+      /* Less clear/more opaque */
       backdrop-filter: blur(20px) saturate(180%);
-      border-radius: 20px;
+      border-radius: 25px;
       /* Pill-shaped (half of height) */
       border: 0.5px solid rgba(255, 255, 255, 0.15);
       /* Even thinner/more transparent line */
@@ -74,18 +75,18 @@
     }
 
     .control-panel.loading-ball {
-      width: 40px;
+      width: 50px;
       /* Same height as pill */
-      height: 40px;
+      height: 50px;
       border-radius: 50%;
       animation: pulse-ball 0.6s ease-in-out 3;
       /* Pulse 3 times - faster rate */
     }
 
     .control-panel.loading-active {
-      width: 40px;
+      width: 50px;
       /* Same height as pill */
-      height: 40px;
+      height: 50px;
       border-radius: 50%;
       animation: glow-pulse 2s ease-in-out infinite;
     }
@@ -139,7 +140,7 @@
 
     textarea {
       width: 100%;
-      height: 40px;
+      height: 50px;
       /* Default height */
       line-height: 20px;
       /* Normal line height for multiline */
@@ -421,7 +422,7 @@
     const eventLog = document.getElementById('eventLog');
 
     // Auto-resize control panel based on textarea content
-    const DEFAULT_HEIGHT = 40;
+    const DEFAULT_HEIGHT = 50;
     const MAX_HEIGHT = 200; // Maximum height to prevent excessive expansion
     const LINE_HEIGHT = 20; // Line height from CSS
     const PADDING_VERTICAL = 20; // 10px top + 10px bottom
@@ -474,7 +475,7 @@
         }
       }
 
-      controlPanel.style.borderRadius = '20px';
+      controlPanel.style.borderRadius = '25px';
     }
 
     // Set initial height explicitly
@@ -1083,7 +1084,7 @@
       const temp = document.createElement('div');
       temp.style.position = 'absolute';
       temp.style.visibility = 'hidden';
-      temp.style.width = (350 - 35) + 'px'; // Control panel width minus padding
+      temp.style.width = (420 - 35) + 'px'; // Control panel width minus padding
       temp.style.fontSize = '16px';
       temp.style.lineHeight = '20px';
       temp.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif';
