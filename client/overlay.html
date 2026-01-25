@@ -61,6 +61,15 @@
       /* Smoother easing */
     }
 
+    .input-icon {
+      position: absolute;
+      left: 20px;
+      width: 24px;
+      height: 24px;
+      z-index: 11;
+      pointer-events: none;
+    }
+
     /* Sheen effect */
     .control-panel::after {
       content: '';
@@ -153,8 +162,8 @@
       resize: none;
       outline: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      padding: 20px 25px 20px 25px;
-      /* Vertical padding 20px for centering (60px height - 20px line height) / 2 */
+      padding: 20px 25px 20px 60px;
+      /* Vertical padding 20px for centering, 60px left for icon */
       text-align: left;
       /* Left align text */
       transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
@@ -377,6 +386,7 @@
   <!-- Control Panel -->
   <div class="control-panel" id="controlPanel">
     <img src="assets/loading-svgrepo-com (1).svg" alt="Loading" class="loading-icon" id="loadingIcon">
+    <img src="assets/lighttower-with-light-svgrepo-com.svg" class="input-icon" alt="icon">
     <textarea id="promptInput" placeholder="Type your command..."></textarea>
   </div>
 
@@ -523,6 +533,15 @@
     const SPOTLIGHT_ANIMATION_DURATION = 400; // ms for zoom-in animation
     let lastTargetClickTime = 0; // Debounce target clicks
 
+    // "Zone-in" movement animation
+    let spotlightStartX = 0;
+    let spotlightStartY = 0;
+    let spotlightTargetX = 0;
+    let spotlightTargetY = 0;
+    let spotlightMoveStartTime = 0;
+    let isSpotlightMoving = false;
+    const SPOTLIGHT_MOVE_DURATION = 800; // ms for move animation
+
     // Fade-out animation state
     let spotlightFadingOut = false;
     let spotlightFadeStart = 0;
@@ -570,6 +589,29 @@
 
       const dpr = window.devicePixelRatio || 1;
 
+      // Animate spotlight position (move from box to target)
+      let currentSpotlightX = fixedSpotlightX;
+      let currentSpotlightY = fixedSpotlightY;
+
+      if (isSpotlightMoving) {
+        const elapsed = Date.now() - spotlightMoveStartTime;
+        const progress = Math.min(elapsed / SPOTLIGHT_MOVE_DURATION, 1);
+
+        // Ease out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+
+        currentSpotlightX = spotlightStartX + (spotlightTargetX - spotlightStartX) * eased;
+        currentSpotlightY = spotlightStartY + (spotlightTargetY - spotlightStartY) * eased;
+
+        if (progress >= 1) {
+          isSpotlightMoving = false;
+          currentSpotlightX = fixedSpotlightX; // Snap to final
+          currentSpotlightY = fixedSpotlightY;
+        }
+
+
+      }
+
       // Animate spotlight radius (zoom-in effect)
       let currentRadius = spotlightRadius;
       if (spotlightAnimating) {
@@ -602,17 +644,56 @@
       // Now cut out the spotlight with a soft gradient edge
       ctx.globalCompositeOperation = 'destination-out';
 
+      // DRAW BEAM (Cutout)
+      if (isSpotlightMoving) {
+        // Re-calculate progress for beam logic since we are outside the loop
+        const elapsed = Date.now() - spotlightMoveStartTime;
+        const progress = Math.min(elapsed / SPOTLIGHT_MOVE_DURATION, 1);
+
+        if (progress < 1) {
+          const fadeOpacity = 1 - Math.pow(progress, 3);
+          const dx = currentSpotlightX - spotlightStartX;
+          const dy = currentSpotlightY - spotlightStartY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist > currentRadius) {
+            const angle = Math.atan2(dy, dx);
+            // Tangent points
+            const t1x = currentSpotlightX + currentRadius * Math.cos(angle - Math.PI / 2);
+            const t1y = currentSpotlightY + currentRadius * Math.sin(angle - Math.PI / 2);
+            const t2x = currentSpotlightX + currentRadius * Math.cos(angle + Math.PI / 2);
+            const t2y = currentSpotlightY + currentRadius * Math.sin(angle + Math.PI / 2);
+
+            // Use simple alpha gradient for destination-out (erasure)
+            // Source alpha 1 = Erase fully. Source alpha 0 = Do not erase.
+            const beamGrad = ctx.createLinearGradient(spotlightStartX, spotlightStartY, currentSpotlightX, currentSpotlightY);
+            // At source (icon): Low erasure (maintain darkness)
+            beamGrad.addColorStop(0, `rgba(0, 0, 0, ${0.2 * fadeOpacity})`);
+            // At target (spotlight): High erasure (clear view)
+            beamGrad.addColorStop(1, `rgba(0, 0, 0, ${1.0 * fadeOpacity})`);
+
+            ctx.beginPath();
+            ctx.moveTo(spotlightStartX, spotlightStartY);
+            ctx.lineTo(t1x, t1y);
+            ctx.lineTo(t2x, t2y);
+            ctx.closePath();
+            ctx.fillStyle = beamGrad;
+            ctx.fill();
+          }
+        }
+      }
+
       // Create radial gradient for soft edges
       const gradient = ctx.createRadialGradient(
-        fixedSpotlightX, fixedSpotlightY, displayRadius - featherSize,
-        fixedSpotlightX, fixedSpotlightY, displayRadius + featherSize
+        currentSpotlightX, currentSpotlightY, displayRadius - featherSize,
+        currentSpotlightX, currentSpotlightY, displayRadius + featherSize
       );
       gradient.addColorStop(0, 'rgba(0, 0, 0, 1)'); // Fully transparent center
       gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)'); // Soft transition
       gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Blend to overlay
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius + featherSize, 0, 2 * Math.PI);
+      ctx.arc(currentSpotlightX, currentSpotlightY, displayRadius + featherSize, 0, 2 * Math.PI);
       ctx.fillStyle = gradient;
       ctx.fill();
 
@@ -621,22 +702,22 @@
       // Add subtle inner glow (light glow inside the spotlight)
       ctx.save();
       const innerGlowGradient = ctx.createRadialGradient(
-        fixedSpotlightX, fixedSpotlightY, 0,
-        fixedSpotlightX, fixedSpotlightY, displayRadius
+        currentSpotlightX, currentSpotlightY, 0,
+        currentSpotlightX, currentSpotlightY, displayRadius
       );
       innerGlowGradient.addColorStop(0, `rgba(255, 255, 255, ${0.08 * spotlightOpacity})`);
       innerGlowGradient.addColorStop(0.7, `rgba(255, 255, 255, ${0.03 * spotlightOpacity})`);
       innerGlowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius, 0, 2 * Math.PI);
+      ctx.arc(currentSpotlightX, currentSpotlightY, displayRadius, 0, 2 * Math.PI);
       ctx.fillStyle = innerGlowGradient;
       ctx.fill();
       ctx.restore();
 
       // Draw spotlight ring with white/gray pulsing glow
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius, 0, 2 * Math.PI);
+      ctx.arc(currentSpotlightX, currentSpotlightY, displayRadius, 0, 2 * Math.PI);
 
       const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
       ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * spotlightOpacity * 0.7})`;
@@ -860,6 +941,25 @@
             // Use coordinates directly (already in physical pixel space)
             fixedSpotlightX = data.x;
             fixedSpotlightY = data.y;
+
+            // Start movement animation from control panel
+            const icon = document.querySelector('.input-icon');
+            if (icon) {
+              const iconRect = icon.getBoundingClientRect();
+              // Start from center of the lighttower icon
+              spotlightStartX = iconRect.left + iconRect.width / 2;
+              spotlightStartY = iconRect.top + iconRect.height / 2;
+            } else {
+              // Fallback to control panel center if icon missing
+              const controlBox = controlPanel.getBoundingClientRect();
+              spotlightStartX = controlBox.left + controlBox.width / 2;
+              spotlightStartY = controlBox.top + controlBox.height / 2;
+            }
+
+            spotlightTargetX = data.x;
+            spotlightTargetY = data.y;
+            spotlightMoveStartTime = Date.now();
+            isSpotlightMoving = true;
 
             // Calculate radius from bounding box if available
             if (data.bbox && Array.isArray(data.bbox) && data.bbox.length === 4) {
@@ -1187,7 +1287,7 @@
       const temp = document.createElement('div');
       temp.style.position = 'absolute';
       temp.style.visibility = 'hidden';
-      temp.style.width = (420 - 35) + 'px'; // Control panel width minus padding
+      temp.style.width = (420 - 85) + 'px'; // Control panel width minus padding (60px left + 25px right)
       temp.style.fontSize = '16px';
       temp.style.lineHeight = '20px';
       temp.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif';
