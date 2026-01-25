@@ -523,6 +523,10 @@
     const ANIM_START_RADIUS = 30; // Start small from control panel
     let lastTargetClickTime = 0; // Debounce target clicks
 
+    // Morphing pill-to-circle animation state
+    let animStartWidth = 150;  // Starting pill width
+    let animStartHeight = 50;  // Starting pill height
+
     // Fade-out animation state
     let spotlightFadingOut = false;
     let spotlightFadeStart = 0;
@@ -538,7 +542,23 @@
       ctx.setLineDash([]);
     }
 
-    // Draw spotlight circle - ONLY when in tutorial mode with a target
+    // Helper function to draw a rounded rectangle path
+    function roundedRectPath(ctx, x, y, width, height, radius) {
+      const r = Math.min(radius, width / 2, height / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + width - r, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+      ctx.lineTo(x + width, y + height - r);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+      ctx.lineTo(x + r, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    // Draw spotlight - morphs from pill to circle during animation
     let lastSpotlightLog = 0;
     function drawSpotlightCircle() {
       // Handle fade-out animation
@@ -570,16 +590,18 @@
 
       const dpr = window.devicePixelRatio || 1;
 
-      // Animate spotlight position and radius (fly-out from control panel)
+      // Animate spotlight position, size, and shape (morph from pill to circle)
       let currentRadius = spotlightRadius;
       let currentX = fixedSpotlightX;
       let currentY = fixedSpotlightY;
+      let morphProgress = 1; // 0 = pill, 1 = circle
 
       if (spotlightAnimating) {
         const elapsed = Date.now() - spotlightAnimationStart;
         const progress = Math.min(elapsed / SPOTLIGHT_ANIMATION_DURATION, 1);
         // Ease-out exponential - fast start, slow approach to target
         const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+        morphProgress = eased;
 
         // Animate position from control panel to target
         currentX = animStartX + (animTargetX - animStartX) * eased;
@@ -594,12 +616,22 @@
           currentRadius = targetSpotlightRadius;
           currentX = animTargetX;
           currentY = animTargetY;
+          morphProgress = 1;
         }
       }
 
-      // Make radius 15% bigger
+      // Calculate morphing dimensions
+      // At morphProgress=0: pill shape (animStartWidth x animStartHeight)
+      // At morphProgress=1: circle (displayRadius * 2)
       const displayRadius = currentRadius * 1.15;
-      const featherSize = displayRadius * 0.3; // Soft edge feather amount
+      const targetSize = displayRadius * 2;
+
+      // Interpolate width and height
+      const currentWidth = animStartWidth + (targetSize - animStartWidth) * morphProgress;
+      const currentHeight = animStartHeight + (targetSize - animStartHeight) * morphProgress;
+      const currentCornerRadius = (animStartHeight / 2) + ((targetSize / 2) - (animStartHeight / 2)) * morphProgress;
+
+      const featherSize = Math.min(currentWidth, currentHeight) * 0.15;
 
       // Draw dimmed overlay with soft feathered spotlight cutout
       ctx.save();
@@ -611,75 +643,83 @@
       // Now cut out the spotlight with a soft gradient edge
       ctx.globalCompositeOperation = 'destination-out';
 
-      // Create radial gradient for soft edges
-      const gradient = ctx.createRadialGradient(
-        currentX, currentY, displayRadius - featherSize,
-        currentX, currentY, displayRadius + featherSize
-      );
-      gradient.addColorStop(0, 'rgba(0, 0, 0, 1)'); // Fully transparent center
-      gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)'); // Soft transition
-      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Blend to overlay
+      // For morphing shape, we draw multiple slightly larger shapes with decreasing opacity
+      // to create a soft feathered edge
+      const featherSteps = 8;
+      for (let i = featherSteps; i >= 0; i--) {
+        const featherOffset = (i / featherSteps) * featherSize;
+        const alpha = i === 0 ? 1 : (1 - i / featherSteps) * 0.5;
 
-      ctx.beginPath();
-      ctx.arc(currentX, currentY, displayRadius + featherSize, 0, 2 * Math.PI);
-      ctx.fillStyle = gradient;
-      ctx.fill();
+        ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+        roundedRectPath(
+          ctx,
+          currentX - (currentWidth / 2) - featherOffset,
+          currentY - (currentHeight / 2) - featherOffset,
+          currentWidth + featherOffset * 2,
+          currentHeight + featherOffset * 2,
+          currentCornerRadius + featherOffset
+        );
+        ctx.fill();
+      }
 
       ctx.restore();
 
       // Add subtle inner glow (light glow inside the spotlight)
       ctx.save();
+      const glowRadius = Math.min(currentWidth, currentHeight) / 2;
       const innerGlowGradient = ctx.createRadialGradient(
         currentX, currentY, 0,
-        currentX, currentY, displayRadius
+        currentX, currentY, glowRadius
       );
       innerGlowGradient.addColorStop(0, `rgba(255, 255, 255, ${0.08 * spotlightOpacity})`);
       innerGlowGradient.addColorStop(0.7, `rgba(255, 255, 255, ${0.03 * spotlightOpacity})`);
       innerGlowGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-      ctx.beginPath();
-      ctx.arc(currentX, currentY, displayRadius, 0, 2 * Math.PI);
+      roundedRectPath(ctx, currentX - currentWidth / 2, currentY - currentHeight / 2, currentWidth, currentHeight, currentCornerRadius);
       ctx.fillStyle = innerGlowGradient;
       ctx.fill();
       ctx.restore();
 
-      // Draw soft organic halo - subtle and delicate
-      const pulse = Math.sin(Date.now() / 400) * 0.1 + 0.9;
+      // Draw soft organic halo - subtle and delicate (only when mostly circular)
+      if (morphProgress > 0.7) {
+        const pulse = Math.sin(Date.now() / 400) * 0.1 + 0.9;
+        const haloOpacity = (morphProgress - 0.7) / 0.3; // Fade in halo as it becomes circular
 
-      // Soft outer glow - very subtle
-      ctx.save();
-      const outerGlow = ctx.createRadialGradient(
-        currentX, currentY, displayRadius * 0.95,
-        currentX, currentY, displayRadius * 1.12
-      );
-      outerGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      outerGlow.addColorStop(0.4, `rgba(255, 255, 255, ${0.12 * pulse * spotlightOpacity})`);
-      outerGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.06 * pulse * spotlightOpacity})`);
-      outerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        // Soft outer glow - very subtle
+        ctx.save();
+        const outerGlow = ctx.createRadialGradient(
+          currentX, currentY, displayRadius * 0.95,
+          currentX, currentY, displayRadius * 1.12
+        );
+        outerGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        outerGlow.addColorStop(0.4, `rgba(255, 255, 255, ${0.12 * pulse * spotlightOpacity * haloOpacity})`);
+        outerGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.06 * pulse * spotlightOpacity * haloOpacity})`);
+        outerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-      ctx.beginPath();
-      ctx.arc(currentX, currentY, displayRadius * 1.12, 0, 2 * Math.PI);
-      ctx.fillStyle = outerGlow;
-      ctx.fill();
-      ctx.restore();
+        ctx.beginPath();
+        ctx.arc(currentX, currentY, displayRadius * 1.12, 0, 2 * Math.PI);
+        ctx.fillStyle = outerGlow;
+        ctx.fill();
+        ctx.restore();
 
-      // Soft diffuse ring - gentle glow at the edge
-      ctx.save();
-      const ringGlow = ctx.createRadialGradient(
-        currentX, currentY, displayRadius * 0.92,
-        currentX, currentY, displayRadius * 1.12
-      );
-      ringGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      ringGlow.addColorStop(0.3, `rgba(255, 255, 255, ${0.08 * pulse * spotlightOpacity})`);
-      ringGlow.addColorStop(0.5, `rgba(255, 255, 255, ${0.15 * pulse * spotlightOpacity})`);
-      ringGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.08 * pulse * spotlightOpacity})`);
-      ringGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        // Soft diffuse ring - gentle glow at the edge
+        ctx.save();
+        const ringGlow = ctx.createRadialGradient(
+          currentX, currentY, displayRadius * 0.92,
+          currentX, currentY, displayRadius * 1.12
+        );
+        ringGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        ringGlow.addColorStop(0.3, `rgba(255, 255, 255, ${0.08 * pulse * spotlightOpacity * haloOpacity})`);
+        ringGlow.addColorStop(0.5, `rgba(255, 255, 255, ${0.15 * pulse * spotlightOpacity * haloOpacity})`);
+        ringGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.08 * pulse * spotlightOpacity * haloOpacity})`);
+        ringGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-      ctx.beginPath();
-      ctx.arc(currentX, currentY, displayRadius * 1.12, 0, 2 * Math.PI);
-      ctx.fillStyle = ringGlow;
-      ctx.fill();
-      ctx.restore();
+        ctx.beginPath();
+        ctx.arc(currentX, currentY, displayRadius * 1.12, 0, 2 * Math.PI);
+        ctx.fillStyle = ringGlow;
+        ctx.fill();
+        ctx.restore();
+      }
     }
 
     function drawHighlight(bbox, instruction) {
@@ -910,10 +950,15 @@
               console.log('No bbox, using default radius:', targetSpotlightRadius);
             }
 
-            // Calculate control panel center (start position for fly-out animation)
-            // Control panel: top: 20px, right: 20px, width: 420px, height: 60px
-            const controlPanelCenterX = (window.innerWidth - 20 - 210) * dpr; // right edge - margin - half width
-            const controlPanelCenterY = (20 + 30) * dpr; // top margin + half height
+            // Calculate control panel center and dimensions (start position for fly-out animation)
+            // Read actual dimensions from DOM for accurate morphing
+            const panelRect = controlPanel.getBoundingClientRect();
+            const controlPanelCenterX = (panelRect.left + panelRect.width / 2) * dpr;
+            const controlPanelCenterY = (panelRect.top + panelRect.height / 2) * dpr;
+
+            // Capture current pill dimensions for morphing animation (scaled for retina)
+            animStartWidth = panelRect.width * dpr;
+            animStartHeight = panelRect.height * dpr;
 
             // Set animation start (from control panel) and target positions
             animStartX = controlPanelCenterX;
@@ -926,7 +971,7 @@
             spotlightAnimationStart = Date.now();
             spotlightRadius = ANIM_START_RADIUS; // Start small
 
-            console.log('Tutorial mode: ON, flying from', animStartX, animStartY, 'to', animTargetX, animTargetY, 'radius:', targetSpotlightRadius);
+            console.log('Tutorial mode: ON, morphing from', animStartWidth, 'x', animStartHeight, 'flying from', animStartX, animStartY, 'to', animTargetX, animTargetY, 'radius:', targetSpotlightRadius);
           } else {
             // Start fade-out animation instead of instant clear
             if (tutorialMode && !spotlightFadingOut) {

@@ -218,6 +218,7 @@ def cmd_run(args):
 def cmd_locate(args):
     """Find a single element."""
     from engine.utils.image import draw_highlight
+    from engine.core.regions import RegionManager
 
     img = Image.open(args.image).convert("RGB")
     target = args.target
@@ -231,6 +232,13 @@ def cmd_locate(args):
             quad = int(quad)
         # else keep as string
 
+    # Set up region manager with active window bounds
+    region_mgr = RegionManager()
+    if region != "full":
+        if args.app:
+            region_mgr.set_target_app(args.app)
+        region_mgr.update_for_active_window(img.size[0], img.size[1])
+
     # Only print diagnostic info if not in JSON mode
     if not args.json:
         print(f"Image: {img.size[0]}x{img.size[1]}")
@@ -240,7 +248,7 @@ def cmd_locate(args):
         if quad:
             print(f"Quad: {quad}")
 
-    locator = get_locator()
+    locator = get_locator(region_manager=region_mgr)
     result = locator.locate(img, target, region=region, is_icon=args.icon, instruction=instruction, quad=quad)
 
     # JSON output mode for programmatic access
@@ -434,6 +442,7 @@ def main():
     locate_parser.add_argument("image", help="Screenshot image path")
     locate_parser.add_argument("target", help="Text or description to find")
     locate_parser.add_argument("--region", "-r", help="Region to search in")
+    locate_parser.add_argument("--app", "-a", help="Target app name (e.g., 'System Settings') for window region")
     locate_parser.add_argument("--icon", "-i", action="store_true", help="Target is an icon")
     locate_parser.add_argument("--instruction", help="Full instruction context (for icon detection)")
     locate_parser.add_argument("--quad", "-q", help="Region for icon: 1-4 (quadrants), or top/bottom/left/right (halves)")

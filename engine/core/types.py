@@ -147,6 +147,7 @@ class Plan:
     task: str
     steps: List[Step] = field(default_factory=list)
     current_step: int = 0
+    app: Optional[str] = None  # Target app name (for window region detection)
 
     @property
     def is_complete(self) -> bool:
@@ -175,4 +176,5 @@ class Plan:
             "task": self.task,
             "steps": [s.to_dict() for s in self.steps],
             "current_step": self.current_step,
+            "app": self.app,
         }

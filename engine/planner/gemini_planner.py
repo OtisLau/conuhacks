@@ -10,6 +10,7 @@ import google.generativeai as genai
 
 from engine.core.types import Step, Plan
 from engine.core.exceptions import PlanningError
+from engine.core.regions import get_frontmost_app_excluding
 from engine.utils.image import resize_for_api
 from engine.utils.retry import with_retry, RetryConfig
 from engine.config import Config, get_config
@@ -255,7 +256,17 @@ class GeminiPlanner:
                 print(f"  Warning: '{first_step.target_text}' may not be visible")
                 # Could regenerate plan here, but for now just warn
 
-        return Plan(task=task, steps=steps)
+        # Detect the target app (frontmost, excluding overlay and terminal apps)
+        # This allows locating elements even if user tabs to terminal
+        excluded_apps = [
+            "Electron", "electron", "conu", "CONU",
+            "Alacritty", "Terminal", "iTerm", "iTerm2", "Warp", "kitty", "Hyper",
+        ]
+        target_app = get_frontmost_app_excluding(excluded_apps)
+        if target_app:
+            print(f"  Target app: {target_app}")
+
+        return Plan(task=task, steps=steps, app=target_app)
 
     def refine_plan(
         self,

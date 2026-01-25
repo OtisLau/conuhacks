@@ -237,6 +237,9 @@ async function executeCurrentStep(retryCount = 0) {
   overlayWindow.webContents.send('tutorial-state-change', tutorialState);
 
   // Race two screenshots with staggered timing to catch UI animations/dropdowns
+  // Get target app from step or plan level
+  const targetApp = step.app || (tutorialState.plan && tutorialState.plan.app) || null;
+
   const locateWithScreenshot = async (label) => {
     const screenshotPath = await engineBridge.takeScreenshot();
     const result = await engineBridge.locateElement(
@@ -245,7 +248,8 @@ async function executeCurrentStep(retryCount = 0) {
       step.region || 'full',
       step.is_icon || false,
       step.instruction || '',
-      step.quad || null
+      step.quad || null,
+      targetApp
     );
     return { ...result, label };
   };
