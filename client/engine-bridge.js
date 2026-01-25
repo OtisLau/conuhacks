@@ -6,7 +6,7 @@ const path = require('path');
 const os = require('os');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
-const VENV_PYTHON = path.join(PROJECT_ROOT, '.venv', 'bin', 'python3');
+const VENV_PYTHON = path.join(PROJECT_ROOT, 'engine', '.venv', 'bin', 'python3');
 
 function runEngineCommand(command, args) {
   return new Promise((resolve, reject) => {
