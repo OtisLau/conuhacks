@@ -391,11 +391,11 @@ app.whenReady().then(() => {
     forceQuit();
   });
 
-  // Also register Escape key as backup
-  globalShortcut.register('Escape', () => {
-    console.log('Escape pressed - quitting app');
-    forceQuit();
-  });
+  // Escape key - just log it, don't quit (too easy to hit accidentally)
+  // globalShortcut.register('Escape', () => {
+  //   console.log('Escape pressed - quitting app');
+  //   forceQuit();
+  // });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
