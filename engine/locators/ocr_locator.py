@@ -51,16 +51,32 @@ class OCRLocator(BaseLocator):
         if cached:
             return cached.ocr_data
 
+        # Resize large images for faster OCR (scale coordinates back later)
+        # Max 1800px width - good balance of speed and accuracy
+        max_width = 1800
+        scale = 1.0
+        if img.width > max_width:
+            scale = img.width / max_width
+            new_height = int(img.height / scale)
+            img_for_ocr = img.resize((max_width, new_height), Image.LANCZOS)
+        else:
+            img_for_ocr = img
+
         # Run OCR
         try:
-            data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+            data = pytesseract.image_to_data(img_for_ocr, output_type=pytesseract.Output.DICT)
         except Exception as e:
             raise OCRError(f"Tesseract failed: {e}", cause=e)
+
+        # Scale coordinates back to original image size
+        if scale != 1.0:
+            for key in ["left", "top", "width", "height"]:
+                data[key] = [int(v * scale) for v in data[key]]
 
         # Extract all text for suggestions
         all_text = [t for t in data["text"] if t.strip()]
 
-        # Cache the result
+        # Cache the result (cache with original image hash, but scaled data)
         self.cache.put(img, data, all_text)
         return data
 

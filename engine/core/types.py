@@ -98,10 +98,21 @@ class LocatorResult:
 
 @dataclass
 class Step:
-    """A single step in a task plan."""
+    """A single step in a task plan.
+
+    Quad values for icon location:
+        1 = top-left
+        2 = top-right
+        3 = bottom-left
+        4 = bottom-right
+        "top" = top half (quad 1+2)
+        "left" = left half (quad 1+3)
+        None = full screen (or use region)
+    """
     instruction: str
     target_text: str
     region: str = "full"
+    quad: Optional[any] = None  # 1-4, or "top", "bottom", "left", "right"
     is_icon: bool = False
     completed: bool = False
     result: Optional[LocatorResult] = None
@@ -112,6 +123,7 @@ class Step:
             "instruction": self.instruction,
             "target_text": self.target_text,
             "region": self.region,
+            "quad": self.quad,
             "is_icon": self.is_icon,
             "completed": self.completed,
             "result": self.result.to_dict() if self.result else None,
@@ -124,6 +136,7 @@ class Step:
             instruction=data["instruction"],
             target_text=data["target_text"],
             region=data.get("region", "full"),
+            quad=data.get("quad"),
             is_icon=data.get("is_icon", False),
         )
 

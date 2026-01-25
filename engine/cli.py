@@ -93,9 +93,9 @@ def cmd_run(args):
 
     task = args.task
     print(f"\n[1/3] Planning task: '{task}'...")
-    print("  (2 second delay - switch to target app now...)")
+    print("  (0.5 second delay - switch to target app now...)")
     import time
-    time.sleep(2)
+    time.sleep(0.5)
 
     # Take initial screenshot
     img = take_screenshot()
@@ -140,8 +140,8 @@ def cmd_run(args):
         print(f"  Locating: '{step.target_text}' in region '{step.region}'...")
 
         # Delay before each step so user can switch to target app
-        print("  (2 second delay - switch to target app...)")
-        time.sleep(2)
+        print("  (0.5 second delay - switch to target app...)")
+        time.sleep(0.5)
 
         # Take fresh screenshot and update window regions
         img = take_screenshot()
@@ -154,13 +154,14 @@ def cmd_run(args):
             pass
         region_mgr.update_for_active_window(img.size[0], img.size[1])
 
-        # Locate the element (pass instruction for verification)
+        # Locate the element (pass instruction and quad for icon detection)
         result = locator.locate(
             img,
             step.target_text,
             region=step.region,
             is_icon=step.is_icon,
             instruction=step.instruction,
+            quad=step.quad,
         )
 
         if result.found:
@@ -221,14 +222,26 @@ def cmd_locate(args):
     img = Image.open(args.image).convert("RGB")
     target = args.target
     region = args.region or "full"
+    instruction = args.instruction or ""
+
+    # Parse quad - could be int (1-4) or string (top/bottom/left/right)
+    quad = args.quad
+    if quad:
+        if quad.isdigit():
+            quad = int(quad)
+        # else keep as string
 
     # Only print diagnostic info if not in JSON mode
     if not args.json:
         print(f"Image: {img.size[0]}x{img.size[1]}")
         print(f"Target: '{target}' in region '{region}'")
+        if instruction:
+            print(f"Instruction: '{instruction}'")
+        if quad:
+            print(f"Quad: {quad}")
 
     locator = get_locator()
-    result = locator.locate(img, target, region=region, is_icon=args.icon)
+    result = locator.locate(img, target, region=region, is_icon=args.icon, instruction=instruction, quad=quad)
 
     # JSON output mode for programmatic access
     if args.json:
@@ -422,6 +435,8 @@ def main():
     locate_parser.add_argument("target", help="Text or description to find")
     locate_parser.add_argument("--region", "-r", help="Region to search in")
     locate_parser.add_argument("--icon", "-i", action="store_true", help="Target is an icon")
+    locate_parser.add_argument("--instruction", help="Full instruction context (for icon detection)")
+    locate_parser.add_argument("--quad", "-q", help="Region for icon: 1-4 (quadrants), or top/bottom/left/right (halves)")
     locate_parser.add_argument("--show", "-s", action="store_true", help="Show result image")
     locate_parser.add_argument("--output", "-o", help="Output image path")
     locate_parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")

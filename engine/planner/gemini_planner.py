@@ -31,25 +31,30 @@ Think through the COMPLETE task from start to finish. Include ALL steps needed.
 CRITICAL RULES:
 - Plan the ENTIRE task, not just the first click
 - Include steps for screens that will appear AFTER clicking
-- Don't add unnecessary steps, but DO include all necessary ones
 - Each target_text must be EXACT text on a clickable element
+- For icons (is_icon: true), specify which QUAD of the screen it's in
 
-EXAMPLE - "Turn on dark mode" from System Settings:
-- If showing Wi-Fi and "Appearance" is in sidebar: Step 1 = Click Appearance
-- After clicking Appearance, there will be Light/Dark/Auto options: Step 2 = Click Dark
-- BOTH steps are required to complete the task!
+QUAD values (only for is_icon: true):
+  "top" = top half of screen (header bars, nav bars, toolbars) - USE THIS FOR MOST WEB APP ICONS
+  "bottom" = bottom half (footers, docks)
+  "left" = left half (sidebars)
+  "right" = right half (right panels)
+  1 = top-left quadrant only
+  2 = top-right quadrant only
+  3 = bottom-left quadrant only
+  4 = bottom-right quadrant only
 
 STEP 3 - RETURN JSON:
 {{"analysis": "Brief description of what you see and what steps are needed",
   "steps": [
     {{"instruction": "Click Appearance", "target_text": "Appearance", "region": "window", "is_icon": false}},
-    {{"instruction": "Click Dark to enable dark mode", "target_text": "Dark", "region": "window", "is_icon": false}}
+    {{"instruction": "Click the grid icon to see courses", "target_text": "grid of 9 squares", "region": "window", "quad": "top", "is_icon": true}}
   ]
 }}
 
 Regions: window (active app), full (entire screen), menu_bar, dock
-Use "window" for elements inside the app. Use "full" if unsure.
-is_icon: true ONLY for icons without any text label
+quad: REQUIRED for icons - use "top" for header/navbar icons, "left" for sidebar icons
+is_icon: true ONLY for icons without any text label (omit quad for text elements)
 
 Return valid JSON only.'''
 
@@ -144,11 +149,20 @@ class GeminiPlanner:
                     message=f"Step {index} missing required field: {field}",
                 )
 
+        is_icon = step_data.get("is_icon", False)
+        quad = step_data.get("quad")
+
+        # Validate quad - can be 1-4 or "top", "bottom", "left", "right"
+        valid_quads = [1, 2, 3, 4, "top", "bottom", "left", "right"]
+        if quad is not None and quad not in valid_quads:
+            quad = None
+
         return Step(
             instruction=step_data["instruction"],
             target_text=step_data["target_text"],
             region=step_data.get("region", "full"),
-            is_icon=step_data.get("is_icon", False),
+            quad=quad if is_icon else None,  # Only use quad for icons
+            is_icon=is_icon,
         )
 
     def generate_plan(
@@ -170,8 +184,8 @@ class GeminiPlanner:
         """
         max_steps = max_steps or self.config.plan_max_steps
 
-        # Resize image - use higher res for better accuracy
-        img_small = resize_for_api(img, max_width=1600)
+        # Resize image - HD resolution for faster API calls
+        img_small = resize_for_api(img, max_width=1280)
 
         # Build prompt
         prompt = PLAN_PROMPT.format(task=task)

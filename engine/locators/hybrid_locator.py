@@ -276,6 +276,7 @@ class HybridLocator(BaseLocator):
         is_icon: bool = False,
         raise_on_not_found: bool = False,
         instruction: str = "",
+        quad: Optional[int] = None,
         **kwargs,
     ) -> LocatorResult:
         """
@@ -285,9 +286,10 @@ class HybridLocator(BaseLocator):
             img: Screenshot as PIL Image
             target: Text or description to find
             region: Screen region hint
-            is_icon: If True, skip OCR and use icon detection directly
+            is_icon: If True, use Gemini vision for icon detection
             raise_on_not_found: Raise ElementNotFoundError if not found
             instruction: Full instruction for context (used for verification)
+            quad: For icons, which quadrant to search (1-4)
 
         Returns:
             LocatorResult with found status and coordinates
@@ -295,13 +297,57 @@ class HybridLocator(BaseLocator):
         start = time.time()
         all_suggestions: List[str] = []
 
-        # Always try OCR (OmniParser icon detection is disabled)
+        # If is_icon=True, use Gemini vision-based icon detection
+        if is_icon:
+            result = self._try_icon(img, target, region, instruction=instruction, quad=quad, **kwargs)
+            if result.found:
+                result.method = LocatorMethod.HYBRID
+                result.time_ms = (time.time() - start) * 1000
+                return result
+            all_suggestions.extend(result.suggestions or [])
+
+            # Fallback: try full screen if region search failed (but keep quad)
+            if region != "full":
+                result = self._try_icon(img, target, "full", instruction=instruction, quad=quad, **kwargs)
+                if result.found:
+                    result.method = LocatorMethod.HYBRID
+                    result.time_ms = (time.time() - start) * 1000
+                    return result
+                all_suggestions.extend(result.suggestions or [])
+
+            # Icon detection failed - return not found (don't fall back to OCR for icons)
+            elapsed_ms = (time.time() - start) * 1000
+            final_result = LocatorResult(
+                found=False,
+                element=None,
+                bbox=None,
+                confidence=0,
+                method=LocatorMethod.HYBRID,
+                time_ms=elapsed_ms,
+                suggestions=list(set(all_suggestions)),
+            )
+
+            if raise_on_not_found:
+                raise ElementNotFoundError(
+                    target=target,
+                    region=region,
+                    suggestions=final_result.suggestions,
+                )
+            return final_result
+
+        # For text elements, use OCR
         result = self._try_ocr(img, target, region, **kwargs)
         if result.found:
             all_matches = getattr(result, 'all_matches', [])
 
-            # Verify with Gemini if we have instruction context
-            if len(all_matches) >= 1 and instruction:
+            # Skip Gemini verification for single high-confidence matches (speed optimization)
+            # Only verify when: multiple matches OR single low-confidence match
+            needs_verification = (
+                len(all_matches) > 1 or
+                (len(all_matches) == 1 and all_matches[0].get("confidence", 0) < 85)
+            )
+
+            if needs_verification and instruction and all_matches:
                 best_match = self._pick_best_match(img, all_matches, target, instruction)
                 if best_match is None:
                     result.found = False
@@ -322,7 +368,14 @@ class HybridLocator(BaseLocator):
             result = self._try_ocr(img, target, "full", **kwargs)
             if result.found:
                 all_matches = getattr(result, 'all_matches', [])
-                if len(all_matches) >= 1 and instruction:
+
+                # Same optimization: skip verification for single high-confidence matches
+                needs_verification = (
+                    len(all_matches) > 1 or
+                    (len(all_matches) == 1 and all_matches[0].get("confidence", 0) < 85)
+                )
+
+                if needs_verification and instruction and all_matches:
                     best_match = self._pick_best_match(img, all_matches, target, instruction)
                     if best_match is None:
                         result.found = False

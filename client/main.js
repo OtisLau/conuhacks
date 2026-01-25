@@ -238,12 +238,14 @@ async function executeCurrentStep(retryCount = 0) {
   // Take fresh screenshot
   const screenshotPath = await engineBridge.takeScreenshot();
 
-  // Locate target element
+  // Locate target element (pass instruction and quad for icon detection)
   const result = await engineBridge.locateElement(
     screenshotPath,
     step.target_text,
     step.region || 'full',
-    step.is_icon || false
+    step.is_icon || false,
+    step.instruction || '',
+    step.quad || null
   );
 
   console.log('Locate result:', JSON.stringify(result));
