@@ -32,7 +32,8 @@
       right: 20px; /* Top right */
       left: auto; /* Remove left positioning */
       width: 350px; /* Smaller width */
-      height: 40px; /* Smaller height */
+      min-height: 40px; /* Minimum height */
+      max-height: 120px; /* Max height for ~3 lines */
       background: linear-gradient(to right, #2a2a2a, #252525); /* More subtle gradient */
       /* backdrop-filter removed */
       border-radius: 20px; /* Pill-shaped (half of height) */
@@ -45,7 +46,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
+      transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
     }
 
     .control-panel.loading-ball {
@@ -89,8 +90,9 @@
 
     textarea {
       width: 100%;
-      height: 100%; /* Fill the container */
-      line-height: 40px; /* Match container height for vertical centering */
+      min-height: 40px; /* Minimum height */
+      max-height: 120px; /* Match control panel max */
+      line-height: 1.4; /* Normal line height for readability */
       background: transparent;
       border: none;
       color: white;
@@ -98,9 +100,10 @@
       resize: none;
       outline: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      padding: 0 15px 0 20px; /* Horizontal padding only */
+      padding: 10px 15px 10px 20px; /* Vertical and horizontal padding */
       text-align: left; /* Left align text */
-      transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
+      transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
+      overflow-y: auto; /* Allow scrolling if content exceeds max */
     }
 
     .control-panel.loading-ball textarea,
@@ -264,6 +267,8 @@
       font-size: 16px;
       line-height: 1.5;
       margin-bottom: 15px;
+      max-height: 300px; /* Max height to prevent excessive growth */
+      overflow-y: auto; /* Allow scrolling if content is too long */
     }
 
     .instruction-footer {
@@ -926,6 +931,33 @@
 
     // Start animation loop to show border
     animate();
+
+    // Auto-resize textarea and control panel based on content
+    function autoResizeTextarea() {
+      // Reset height to get accurate scrollHeight
+      promptInput.style.height = '40px';
+      controlPanel.style.height = '40px';
+
+      // Calculate new height based on content (with min/max constraints)
+      const scrollHeight = promptInput.scrollHeight;
+      const newHeight = Math.min(Math.max(scrollHeight, 40), 120);
+
+      promptInput.style.height = newHeight + 'px';
+      controlPanel.style.height = newHeight + 'px';
+
+      // Adjust border radius when expanded
+      if (newHeight > 40) {
+        controlPanel.style.borderRadius = '20px';
+      } else {
+        controlPanel.style.borderRadius = '20px';
+      }
+    }
+
+    // Listen for input changes to auto-resize
+    promptInput.addEventListener('input', autoResizeTextarea);
+
+    // Also resize on window resize
+    window.addEventListener('resize', autoResizeTextarea);
 
     // Auto-focus the input field on load
     promptInput.focus();
