@@ -767,7 +767,261 @@ For hackathon judging:
 
 ---
 
-## 12. Team Task Breakdown (4 People)
+## 12. Python Engine System (Implemented)
+
+The core locator and planner logic has been implemented as a modular Python engine in `/engine/`. This serves as the backend for the Electron app.
+
+### Engine Architecture
+
+```
+/engine
+├── __init__.py              # Public API exports
+├── __main__.py              # Entry point for python -m engine
+├── cli.py                   # Dev CLI for testing
+├── config.py                # Configuration management
+│
+├── /core                    # Core data types and utilities
+│   ├── types.py             # BoundingBox, LocatorResult, Step, Plan
+│   ├── regions.py           # Screen region management
+│   └── exceptions.py        # Custom exceptions
+│
+├── /locators                # Element location strategies
+│   ├── base.py              # BaseLocator interface
+│   ├── ocr_locator.py       # Tesseract OCR-based text finder
+│   ├── icon_locator.py      # OmniParser + Gemini icon finder
+│   └── hybrid_locator.py    # Orchestrates OCR → Icon fallback
+│
+├── /planner                 # Task planning
+│   ├── gemini_planner.py    # Gemini vision-based step generation
+│   └── validator.py         # Plan validation utilities
+│
+├── /cache                   # Performance optimizations
+│   └── ocr_cache.py         # LRU cache for OCR results
+│
+├── /utils                   # Shared utilities
+│   ├── image.py             # Screenshot, resize, highlight drawing
+│   └── retry.py             # Retry decorator with backoff
+│
+└── /tests                   # Unit tests
+    ├── conftest.py
+    └── test_ocr_locator.py
+```
+
+### Core Types (`engine/core/types.py`)
+
+```python
+# Bounding box for element coordinates
+@dataclass
+class BoundingBox:
+    x1: int; y1: int; x2: int; y2: int
+
+    @property
+    def center(self) -> tuple[int, int]
+    def expand(self, padding: int) -> BoundingBox
+
+# Result of a locate operation
+@dataclass
+class LocatorResult:
+    found: bool
+    element: Optional[str]
+    bbox: Optional[BoundingBox]
+    confidence: float          # 0-100
+    method: LocatorMethod      # OCR, ICON, or HYBRID
+    time_ms: float
+    suggestions: List[str]     # Similar text if not found
+
+# A single step in a task plan
+@dataclass
+class Step:
+    instruction: str           # "Click Appearance"
+    target_text: str           # "Appearance"
+    region: str                # "sidebar"
+    is_icon: bool              # True for icon-only elements
+
+# A complete task plan
+@dataclass
+class Plan:
+    task: str
+    steps: List[Step]
+    current_step: int
+```
+
+### Locator System
+
+**HybridLocator** - Main orchestrator (`engine/locators/hybrid_locator.py`)
+- Tries OCR first (fast, ~95% accurate for text)
+- Falls back to icon detection if OCR fails or `is_icon=True`
+- Uses Gemini to validate/disambiguate multiple matches
+- Supports window-relative region detection
+
+```python
+from engine import HybridLocator
+from PIL import Image
+
+locator = HybridLocator()
+img = Image.open("screenshot.png")
+
+result = locator.locate(
+    img,
+    target="Appearance",
+    region="sidebar",
+    instruction="Click Appearance to open settings"  # For Gemini validation
+)
+
+if result.found:
+    print(f"Found at {result.bbox.center}")  # (x, y) coordinates
+```
+
+**OCRLocator** - Text detection (`engine/locators/ocr_locator.py`)
+- Uses Tesseract OCR with LRU caching
+- Supports multi-word phrase matching
+- Fuzzy matching with configurable threshold
+- Returns suggestions for similar text when not found
+
+**IconLocator** - Icon detection (`engine/locators/icon_locator.py`)
+- Uses OmniParser for element detection
+- Validates candidates with Gemini vision
+- ~70% accuracy for icons without text
+
+### Region Management (`engine/core/regions.py`)
+
+Predefined screen regions (normalized 0-1 coordinates):
+
+| Region | Coordinates | Use Case |
+|--------|-------------|----------|
+| `menu_bar` | (0, 0) → (1, 0.04) | macOS menu bar |
+| `toolbar` | (0, 0.04) → (1, 0.12) | App toolbars |
+| `sidebar` | (0, 0.04) → (0.25, 0.95) | Left sidebar |
+| `main` | (0.25, 0.04) → (1, 0.95) | Main content area |
+| `dock` | (0, 0.95) → (1, 1) | macOS dock |
+| `full` | (0, 0) → (1, 1) | Entire screen |
+
+**Window-Relative Regions** - Automatically detected at runtime:
+- `RegionManager.update_for_active_window()` detects target app window bounds
+- Adjusts sidebar/main/toolbar regions to be relative to the window
+- Handles Retina scaling automatically
+- Prevents finding elements in other windows (like Terminal)
+
+```python
+from engine.core.regions import RegionManager
+
+mgr = RegionManager()
+mgr.set_target_app("System Settings")  # Lock to specific app
+mgr.update_for_active_window(screen_width, screen_height)
+
+# Now regions are relative to System Settings window
+region = mgr.get("sidebar")
+```
+
+### Gemini Planner (`engine/planner/gemini_planner.py`)
+
+Generates multi-step plans from a screenshot and task description.
+
+```python
+from engine import GeminiPlanner
+from PIL import Image
+
+planner = GeminiPlanner()
+img = Image.open("screenshot.png")
+
+plan = planner.generate_plan(img, "Turn on dark mode")
+
+for step in plan.steps:
+    print(f"{step.instruction} → target: '{step.target_text}' in {step.region}")
+```
+
+**Planning Features:**
+- Uses `gemini-2.5-pro` for smart multi-step planning
+- Uses `gemini-2.0-flash` for fast validation/QA
+- Validates first step target is visible before returning
+- Supports plan refinement based on feedback
+
+### Configuration (`engine/config.py`)
+
+```python
+@dataclass
+class Config:
+    # API Keys (loaded from env if not provided)
+    google_api_key: Optional[str]
+
+    # OCR Settings
+    ocr_cache_size: int = 100
+    ocr_fuzzy_threshold: float = 0.8
+
+    # Retry Settings
+    max_retries: int = 3
+    retry_base_delay: float = 0.5
+
+    # Gemini Models
+    gemini_planner_model: str = "gemini-2.5-pro"
+    gemini_fast_model: str = "gemini-2.0-flash"
+    plan_max_steps: int = 8
+
+    # Icon Detection
+    icon_confidence_threshold: float = 0.3
+    icon_max_candidates: int = 10
+```
+
+### CLI Usage
+
+```bash
+# Interactive task execution (full flow)
+python -m engine run "Turn on dark mode"
+
+# Find a single element on a screenshot
+python -m engine locate screenshot.png "Settings" --region sidebar --show
+
+# Generate a plan without executing
+python -m engine plan screenshot.png "Check battery health" --json
+
+# Take a screenshot
+python -m engine screenshot --output now.png
+
+# List available regions
+python -m engine regions
+
+# Benchmark OCR performance
+python -m engine benchmark screenshot.png --verbose
+
+# Debug: show all detected text elements
+python -m engine debug screenshot.png --region main --show
+```
+
+### Key Optimizations Implemented
+
+1. **Region Cropping**: 10x faster OCR by cropping to specific regions
+2. **LRU Caching**: Avoids re-running OCR on same image regions
+3. **Window-Relative Regions**: Automatically tracks target app window
+4. **Gemini Verification**: Only called when multiple matches or ambiguity
+5. **Retry with Backoff**: Handles transient API failures gracefully
+6. **Phrase Building**: Matches multi-word targets like "Battery Health"
+
+### Integration with Electron
+
+The engine exposes a clean Python API that can be called from Node.js:
+
+**Option A: Python subprocess** (recommended for development)
+```javascript
+const { spawn } = require('child_process');
+
+async function locate(imagePath, target, region) {
+  return new Promise((resolve) => {
+    const py = spawn('python', ['-m', 'engine.cli', 'locate', imagePath, target, '-r', region, '-j']);
+    let result = '';
+    py.stdout.on('data', (data) => result += data);
+    py.on('close', () => resolve(JSON.parse(result)));
+  });
+}
+```
+
+**Option B: HTTP server** (for production)
+- Wrap engine in a FastAPI server
+- Electron calls localhost endpoints
+- Better for concurrent requests and state management
+
+---
+
+## 13. Team Task Breakdown (4 People)
 
 ### **Person 1: Engine/Locator**
 The core AI pipeline - the brains of the app.

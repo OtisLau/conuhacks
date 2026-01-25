@@ -72,13 +72,16 @@ def _detect_target_app(task: str) -> str:
     elif any(kw in task_lower for kw in ["spotify", "music"]):
         return "Spotify"
 
-    # Default: try to detect from frontmost non-terminal app
-    from engine.core.regions import get_frontmost_app_name
-    frontmost = get_frontmost_app_name()
-    # If frontmost is a terminal, default to System Settings for UI tasks
-    terminals = ["alacritty", "terminal", "iterm2", "iterm", "warp", "kitty", "hyper"]
-    if frontmost and frontmost.lower() in terminals:
-        return "System Settings"
+    # Default: try to detect from frontmost app, excluding terminals and our overlay
+    from engine.core.regions import get_frontmost_app_excluding
+
+    # Apps to ignore (terminals, our Electron overlay, etc.)
+    ignored_apps = [
+        "alacritty", "terminal", "iterm2", "iterm", "warp", "kitty", "hyper",
+        "electron", "conu", "CONU",  # Our overlay app
+    ]
+
+    frontmost = get_frontmost_app_excluding(ignored_apps)
     return frontmost or "System Settings"
 
 
@@ -219,11 +222,26 @@ def cmd_locate(args):
     target = args.target
     region = args.region or "full"
 
-    print(f"Image: {img.size[0]}x{img.size[1]}")
-    print(f"Target: '{target}' in region '{region}'")
+    # Only print diagnostic info if not in JSON mode
+    if not args.json:
+        print(f"Image: {img.size[0]}x{img.size[1]}")
+        print(f"Target: '{target}' in region '{region}'")
 
     locator = get_locator()
     result = locator.locate(img, target, region=region, is_icon=args.icon)
+
+    # JSON output mode for programmatic access
+    if args.json:
+        output = {
+            "found": result.found,
+            "bbox": result.bbox.to_list() if result.bbox else None,
+            "center": list(result.bbox.center) if result.bbox else None,
+            "confidence": result.confidence,
+            "method": result.method.value if result.method else None,
+            "suggestions": result.suggestions,
+        }
+        print(json.dumps(output))
+        return 0 if result.found else 1
 
     if result.found:
         print(f"\nFound!")
@@ -406,6 +424,7 @@ def main():
     locate_parser.add_argument("--icon", "-i", action="store_true", help="Target is an icon")
     locate_parser.add_argument("--show", "-s", action="store_true", help="Show result image")
     locate_parser.add_argument("--output", "-o", help="Output image path")
+    locate_parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
 
     # plan command
     plan_parser = subparsers.add_parser("plan", help="Generate a plan")
