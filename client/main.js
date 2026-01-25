@@ -208,10 +208,11 @@ function setupIpcHandlers() {
   });
 }
 
-// Execute the current step in the tutorial (with retry logic)
+// Execute the current step in the tutorial (with parallel screenshot racing)
 async function executeCurrentStep(retryCount = 0) {
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 1500; // 1.5 seconds between retries
+  const MAX_RETRIES = 2; // Reduced since we now race two screenshots per attempt
+  const RETRY_DELAY = 1000;
+  const STAGGER_DELAY = 1000; // Delay before taking second screenshot
 
   if (!tutorialState.plan || !tutorialState.plan.steps) {
     tutorialState.mode = 'error';
@@ -235,20 +236,69 @@ async function executeCurrentStep(retryCount = 0) {
   tutorialState.mode = 'locating';
   overlayWindow.webContents.send('tutorial-state-change', tutorialState);
 
-  // Take fresh screenshot
-  const screenshotPath = await engineBridge.takeScreenshot();
+  // Race two screenshots with staggered timing to catch UI animations/dropdowns
+  const locateWithScreenshot = async (label) => {
+    const screenshotPath = await engineBridge.takeScreenshot();
+    const result = await engineBridge.locateElement(
+      screenshotPath,
+      step.target_text,
+      step.region || 'full',
+      step.is_icon || false,
+      step.instruction || '',
+      step.quad || null
+    );
+    return { ...result, label };
+  };
 
-  // Locate target element (pass instruction and quad for icon detection)
-  const result = await engineBridge.locateElement(
-    screenshotPath,
-    step.target_text,
-    step.region || 'full',
-    step.is_icon || false,
-    step.instruction || '',
-    step.quad || null
-  );
+  // Start first screenshot immediately
+  const promise1 = locateWithScreenshot('immediate');
 
+  // Start second screenshot after stagger delay
+  const promise2 = new Promise(resolve => {
+    setTimeout(async () => {
+      const result = await locateWithScreenshot('delayed');
+      resolve(result);
+    }, STAGGER_DELAY);
+  });
+
+  // Race: first confident match wins, or wait for both if neither confident
+  let result = null;
+
+  const raceForSuccess = async () => {
+    return new Promise(async (resolve) => {
+      let result1 = null;
+      let result2 = null;
+      let resolved = false;
+
+      const checkAndResolve = (res, which) => {
+        if (resolved) return;
+
+        if (res.found && res.center) {
+          // This one succeeded - use it immediately
+          resolved = true;
+          console.log(`${res.label} screenshot found element first`);
+          resolve(res);
+        } else {
+          // Store the failure
+          if (which === 1) result1 = res;
+          else result2 = res;
+
+          // If both have completed and neither found it, resolve with the first result
+          if (result1 && result2) {
+            resolved = true;
+            resolve(result1); // Return first result (with suggestions)
+          }
+        }
+      };
+
+      promise1.then(res => checkAndResolve(res, 1));
+      promise2.then(res => checkAndResolve(res, 2));
+    });
+  };
+
+  result = await raceForSuccess();
   console.log('Locate result:', JSON.stringify(result));
+
   if (result.found && result.center) {
     tutorialState.mode = 'highlighting';
     // Adjust coordinates for menu bar offset (workArea vs full screen)

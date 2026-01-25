@@ -31,9 +31,11 @@
       position: absolute;
       top: 20px;
       right: 20px;
+      bottom: auto;
       left: auto;
       width: 420px;
       height: 60px;
+      transform-origin: top right;
       /* Glass effect with gradient for depth */
       background: linear-gradient(
         145deg,
@@ -61,6 +63,13 @@
       align-items: center;
       justify-content: center;
       transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+
+    /* Bottom-right position mode - expands upward */
+    .control-panel.position-bottom {
+      top: auto;
+      bottom: 20px;
+      transform-origin: bottom right;
     }
 
     /* Sheen effect */
@@ -422,9 +431,11 @@
 
     // Auto-resize control panel based on textarea content
     const DEFAULT_HEIGHT = 60;
-    const MAX_HEIGHT = 200; // Maximum height to prevent excessive expansion
+    const MAX_HEIGHT = 300; // Maximum height to prevent excessive expansion
     const LINE_HEIGHT = 20; // Line height from CSS
-    const PADDING_VERTICAL = 40; // 15px top + 25px bottom
+    const PADDING_VERTICAL = 40; // 20px top + 20px bottom
+    const PILL_TO_RECT_THRESHOLD = 100; // Height at which to switch from pill to rectangle (~3 lines)
+    const RECT_BORDER_RADIUS = 25; // Border radius when in rectangle mode
 
     function adjustControlPanelHeight() {
       // Skip if in loading state
@@ -475,8 +486,12 @@
         }
       }
 
-      // Always use pill shape - border-radius = half the height
-      controlPanel.style.borderRadius = (finalHeight / 2) + 'px';
+      // Use pill shape for small heights, rectangle for larger
+      if (finalHeight <= PILL_TO_RECT_THRESHOLD) {
+        controlPanel.style.borderRadius = (finalHeight / 2) + 'px';
+      } else {
+        controlPanel.style.borderRadius = RECT_BORDER_RADIUS + 'px';
+      }
     }
 
     // Set initial height explicitly
@@ -1211,8 +1226,12 @@
         promptInput.style.height = finalHeight + 'px';
       }
 
-      // Always use pill shape - border-radius = half the height
-      controlPanel.style.borderRadius = (finalHeight / 2) + 'px';
+      // Use pill shape for small heights, rectangle for larger
+      if (finalHeight <= PILL_TO_RECT_THRESHOLD) {
+        controlPanel.style.borderRadius = (finalHeight / 2) + 'px';
+      } else {
+        controlPanel.style.borderRadius = RECT_BORDER_RADIUS + 'px';
+      }
     }
 
 
@@ -1265,6 +1284,27 @@
         delete activeTypewriters[id];
       }
     }
+
+    // Position toggle state
+    let isBottomPosition = false;
+
+    // Toggle control panel position with Shift+Ctrl+ArrowDown
+    document.addEventListener('keydown', (e) => {
+      if (e.shiftKey && e.ctrlKey && e.key === 'ArrowDown') {
+        e.preventDefault();
+        isBottomPosition = !isBottomPosition;
+
+        if (isBottomPosition) {
+          controlPanel.classList.add('position-bottom');
+          console.log('Control panel moved to bottom-right (expands upward)');
+          logEvent('POSITION', { message: 'Moved to bottom-right' });
+        } else {
+          controlPanel.classList.remove('position-bottom');
+          console.log('Control panel moved to top-right (expands downward)');
+          logEvent('POSITION', { message: 'Moved to top-right' });
+        }
+      }
+    });
 
     // Auto-focus the input field on load
     promptInput.focus();
