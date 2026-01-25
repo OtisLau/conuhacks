@@ -196,6 +196,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onGlobalScroll: (callback) => {
     ipcRenderer.on('global-scroll', (_, data) => callback(data));
   },
+
+  // Tutorial methods
+  startTutorial: (task) => ipcRenderer.invoke('start-tutorial', task),
+  cancelTutorial: () => ipcRenderer.send('cancel-tutorial'),
+  notifyTargetClicked: () => ipcRenderer.send('target-clicked'),
+
+  onTutorialStateChange: (callback) => {
+    ipcRenderer.on('tutorial-state-change', (_, state) => callback(state));
+  },
+
+  onSetSpotlightPosition: (callback) => {
+    ipcRenderer.on('set-spotlight-position', (_, coords) => callback(coords));
+  },
 });
 
 // Initialize mouse forwarding when DOM is ready

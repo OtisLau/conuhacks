@@ -1,11 +1,21 @@
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
+const engineBridge = require('./engine-bridge');
 
 let overlayWindow;
 let spotlightWindow;
 let mouseTrackingInterval;
 let lastMousePos = { x: 0, y: 0 };
+
+// Tutorial state machine
+let tutorialState = {
+  mode: 'idle',  // idle | planning | locating | highlighting | complete | error
+  plan: null,
+  currentStepIndex: 0,
+  targetCoords: null,
+  error: null
+};
 
 function forceQuit() {
   console.log('FORCE QUIT CALLED');
@@ -99,40 +109,183 @@ function createSpotlightWindow() {
   }
 }
 
-// Set up IPC handlers ONCE
-ipcMain.on('set-click-through', (event, enabled) => {
-  console.log('Click-through mode:', enabled);
-  if (overlayWindow) {
-    overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
+function setupIpcHandlers() {
+  ipcMain.on('set-click-through', (event, enabled) => {
+    console.log('Click-through mode:', enabled);
+    if (overlayWindow) {
+      overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
+    }
+  });
+
+  ipcMain.on('set-global-click-through', (event, enabled) => {
+    console.log('Global click-through mode:', enabled);
+    if (overlayWindow) {
+      overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
+    }
+  });
+
+  ipcMain.on('forward-click', (event, data) => {
+    // Clicks automatically pass through when click-through is enabled
+    // This just logs the click event
+    console.log(`Click at (${data.x}, ${data.y}) - button: ${data.button}`);
+  });
+
+  ipcMain.on('quit-app', (event) => {
+    console.log('Quit app IPC received from a window!');
+    if (event && event.sender) {
+      const senderWindow = BrowserWindow.fromWebContents(event.sender);
+      if (senderWindow) {
+          console.log(`Quit signal from window with ID: ${senderWindow.id}`);
+          // To get more info, we can check the window's title or URL
+          console.log(`Window Title: ${senderWindow.getTitle()}`);
+          console.log(`Window URL: ${senderWindow.webContents.getURL()}`);
+      }
+    }
+    forceQuit();
+  });
+
+  // Tutorial: Start tutorial with a task
+  ipcMain.handle('start-tutorial', async (event, task) => {
+    try {
+      console.log('Starting tutorial for task:', task);
+      tutorialState.mode = 'planning';
+      tutorialState.error = null;
+      overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+
+      // Take screenshot
+      console.log('Taking screenshot...');
+      const screenshotPath = await engineBridge.takeScreenshot();
+      console.log('Screenshot saved to:', screenshotPath);
+
+      // Generate plan
+      console.log('Generating plan...');
+      const plan = await engineBridge.generatePlan(screenshotPath, task);
+      console.log('Plan generated:', JSON.stringify(plan, null, 2));
+      tutorialState.plan = plan;
+      tutorialState.currentStepIndex = 0;
+
+      // Execute first step
+      await executeCurrentStep();
+
+      return { success: true, plan };
+    } catch (error) {
+      console.error('Tutorial error:', error);
+      tutorialState.mode = 'error';
+      tutorialState.error = error.message;
+      overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Tutorial: User clicked the target
+  ipcMain.on('target-clicked', async () => {
+    if (tutorialState.mode === 'highlighting') {
+      console.log('Target clicked, advancing to next step...');
+      tutorialState.currentStepIndex++;
+
+      // Clear the spotlight while waiting for next step
+      tutorialState.targetCoords = null;
+      overlayWindow.webContents.send('set-spotlight-position', null);
+
+      // Wait for UI to settle after click (2.5s for page transitions)
+      setTimeout(async () => {
+        try {
+          await executeCurrentStep();
+        } catch (error) {
+          console.error('Error executing step:', error);
+          tutorialState.mode = 'error';
+          tutorialState.error = error.message;
+          overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+        }
+      }, 2500);
+    }
+  });
+
+  // Tutorial: Cancel/reset tutorial
+  ipcMain.on('cancel-tutorial', () => {
+    console.log('Canceling tutorial');
+    tutorialState = {
+      mode: 'idle',
+      plan: null,
+      currentStepIndex: 0,
+      targetCoords: null,
+      error: null
+    };
+    overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+    overlayWindow.webContents.send('set-spotlight-position', null);
+  });
+}
+
+// Execute the current step in the tutorial (with retry logic)
+async function executeCurrentStep(retryCount = 0) {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1500; // 1.5 seconds between retries
+
+  if (!tutorialState.plan || !tutorialState.plan.steps) {
+    tutorialState.mode = 'error';
+    tutorialState.error = 'No plan available';
+    overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+    return;
   }
-});
 
-ipcMain.on('set-global-click-through', (event, enabled) => {
-  console.log('Global click-through mode:', enabled);
-  if (overlayWindow) {
-    overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
+  const step = tutorialState.plan.steps[tutorialState.currentStepIndex];
+  if (!step) {
+    // All steps complete
+    console.log('Tutorial complete!');
+    tutorialState.mode = 'complete';
+    tutorialState.targetCoords = null;
+    overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+    overlayWindow.webContents.send('set-spotlight-position', null);
+    return;
   }
-});
 
-ipcMain.on('forward-click', (event, data) => {
-  // Clicks automatically pass through when click-through is enabled
-  // This just logs the click event
-  console.log(`Click at (${data.x}, ${data.y}) - button: ${data.button}`);
-});
+  console.log(`Executing step ${tutorialState.currentStepIndex + 1} (attempt ${retryCount + 1}/${MAX_RETRIES}):`, step);
+  tutorialState.mode = 'locating';
+  overlayWindow.webContents.send('tutorial-state-change', tutorialState);
 
-ipcMain.on('quit-app', (event) => {
-  console.log('Quit app IPC received from a window!');
-  if (event && event.sender) {
-    const senderWindow = BrowserWindow.fromWebContents(event.sender);
-    if (senderWindow) {
-        console.log(`Quit signal from window with ID: ${senderWindow.id}`);
-        // To get more info, we can check the window's title or URL
-        console.log(`Window Title: ${senderWindow.getTitle()}`);
-        console.log(`Window URL: ${senderWindow.webContents.getURL()}`);
+  // Take fresh screenshot
+  const screenshotPath = await engineBridge.takeScreenshot();
+  console.log('Fresh screenshot for locate:', screenshotPath);
+
+  // Locate target element
+  const result = await engineBridge.locateElement(
+    screenshotPath,
+    step.target_text,
+    step.region || 'full',
+    step.is_icon || false
+  );
+
+  console.log('Locate result:', result);
+
+  if (result.found && result.center) {
+    tutorialState.mode = 'highlighting';
+    tutorialState.targetCoords = { x: result.center[0], y: result.center[1] };
+    overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+    overlayWindow.webContents.send('set-spotlight-position', tutorialState.targetCoords);
+    console.log('Spotlight positioned at:', tutorialState.targetCoords);
+  } else {
+    // Retry if we haven't exceeded max retries
+    if (retryCount < MAX_RETRIES - 1) {
+      console.log(`Element not found, retrying in ${RETRY_DELAY}ms... (attempt ${retryCount + 2}/${MAX_RETRIES})`);
+      setTimeout(async () => {
+        try {
+          await executeCurrentStep(retryCount + 1);
+        } catch (error) {
+          console.error('Retry error:', error);
+          tutorialState.mode = 'error';
+          tutorialState.error = error.message;
+          overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+        }
+      }, RETRY_DELAY);
+    } else {
+      // All retries exhausted
+      tutorialState.mode = 'error';
+      tutorialState.error = `Could not find "${step.target_text}" after ${MAX_RETRIES} attempts${result.suggestions ? '. Suggestions: ' + result.suggestions.join(', ') : ''}`;
+      overlayWindow.webContents.send('tutorial-state-change', tutorialState);
+      console.error('Element not found after retries:', tutorialState.error);
     }
   }
-  forceQuit();
-});
+}
 
 function startGlobalMouseTracking() {
   try {
@@ -225,6 +378,7 @@ function stopGlobalMouseTracking() {
 }
 
 app.whenReady().then(() => {
+  setupIpcHandlers();
   createOverlayWindow();
 
   // Start global mouse tracking
@@ -237,11 +391,11 @@ app.whenReady().then(() => {
     forceQuit();
   });
 
-  // Also register Escape key as backup
-  globalShortcut.register('Escape', () => {
-    console.log('Escape pressed - quitting app');
-    forceQuit();
-  });
+  // Escape key - just log it, don't quit (too easy to hit accidentally)
+  // globalShortcut.register('Escape', () => {
+  //   console.log('Escape pressed - quitting app');
+  //   forceQuit();
+  // });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

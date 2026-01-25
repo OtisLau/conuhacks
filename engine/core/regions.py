@@ -68,43 +68,91 @@ def get_frontmost_app_name() -> Optional[str]:
     return None
 
 
+def get_frontmost_app_excluding(excluded_apps: list) -> Optional[str]:
+    """
+    Get the frontmost application, excluding specified apps (like overlays).
+
+    This is useful when we have a transparent overlay that's technically
+    "frontmost" but we want to know what app is visible behind it.
+
+    Args:
+        excluded_apps: List of app names to exclude (case-insensitive)
+
+    Returns:
+        Name of the frontmost non-excluded app, or None if not found.
+    """
+    # Get all visible application processes with windows, sorted by layer order
+    script = '''
+    tell application "System Events"
+        set appList to {}
+        repeat with proc in (every application process whose visible is true)
+            try
+                if (count of windows of proc) > 0 then
+                    set end of appList to name of proc
+                end if
+            end try
+        end repeat
+        return appList
+    end tell
+    '''
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Parse the AppleScript list output
+            apps_str = result.stdout.strip()
+            # AppleScript returns like: "App1, App2, App3"
+            apps = [a.strip() for a in apps_str.split(",")]
+
+            excluded_lower = [e.lower() for e in excluded_apps]
+            for app in apps:
+                if app.lower() not in excluded_lower:
+                    return app
+    except Exception:
+        pass
+
+    # Fallback: just get frontmost and check
+    frontmost = get_frontmost_app_name()
+    if frontmost and frontmost.lower() not in [e.lower() for e in excluded_apps]:
+        return frontmost
+
+    return None
+
+
 def get_window_bounds_by_app(app_name: Optional[str] = None) -> Optional[Tuple[int, int, int, int]]:
     """
     Get the bounds of a specific app's window on macOS.
 
     Args:
-        app_name: Name of the app (e.g., "System Settings"). If None, uses frontmost.
+        app_name: Name of the app (e.g., "System Settings"). If None, uses frontmost
+                  (excluding overlay apps like Electron).
 
     Returns:
         Tuple of (x, y, width, height) in pixels, or None if failed.
     """
-    if app_name:
-        script = f'''
-        tell application "System Events"
-            tell application process "{app_name}"
-                try
-                    set winBounds to {{position, size}} of window 1
-                    set {{x, y}} to item 1 of winBounds
-                    set {{w, h}} to item 2 of winBounds
-                    return (x as text) & "," & (y as text) & "," & (w as text) & "," & (h as text)
-                end try
-            end tell
+    # If no app specified, find the frontmost non-overlay app
+    if not app_name:
+        ignored_apps = ["electron", "conu", "CONU"]
+        app_name = get_frontmost_app_excluding(ignored_apps)
+        if not app_name:
+            return None
+
+    script = f'''
+    tell application "System Events"
+        tell application process "{app_name}"
+            try
+                set winBounds to {{position, size}} of window 1
+                set {{x, y}} to item 1 of winBounds
+                set {{w, h}} to item 2 of winBounds
+                return (x as text) & "," & (y as text) & "," & (w as text) & "," & (h as text)
+            end try
         end tell
-        '''
-    else:
-        script = '''
-        tell application "System Events"
-            set frontApp to name of first application process whose frontmost is true
-            tell application process frontApp
-                try
-                    set winBounds to {position, size} of window 1
-                    set {x, y} to item 1 of winBounds
-                    set {w, h} to item 2 of winBounds
-                    return (x as text) & "," & (y as text) & "," & (w as text) & "," & (h as text)
-                end try
-            end tell
-        end tell
-        '''
+    end tell
+    '''
     try:
         result = subprocess.run(
             ["osascript", "-e", script],

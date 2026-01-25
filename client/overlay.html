@@ -291,9 +291,15 @@
     // Click capture mode
     let clickCaptureMode = false;
 
-    // Set canvas size to screen size
-    canvas.width = window.screen.width;
-    canvas.height = window.screen.height;
+    // Set canvas size to physical screen size (for Retina displays)
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    canvas.width = window.screen.width * devicePixelRatio;
+    canvas.height = window.screen.height * devicePixelRatio;
+    // Scale the canvas CSS to fit the logical screen size
+    canvas.style.width = window.screen.width + 'px';
+    canvas.style.height = window.screen.height + 'px';
+    console.log('Canvas physical size:', canvas.width, 'x', canvas.height);
+    console.log('Canvas CSS size:', canvas.style.width, 'x', canvas.style.height);
 
     let currentHighlight = null;
     let pulsePhase = 0;
@@ -305,6 +311,12 @@
     let mouseY = canvas.height / 2;
     const circleRadius = 100;
 
+    // Tutorial mode variables
+    let tutorialMode = false;
+    let fixedSpotlightX = null;
+    let fixedSpotlightY = null;
+    let lastTargetClickTime = 0; // Debounce target clicks
+
     // Draw border to show overlay bounds
     function drawBorder() {
       ctx.strokeStyle = 'rgba(142, 142, 147, 0.3)';
@@ -314,13 +326,29 @@
       ctx.setLineDash([]);
     }
 
-    // Draw spotlight circle
+    // Draw spotlight circle - ONLY when in tutorial mode with a target
     function drawSpotlightCircle() {
+      // Only draw if we're in tutorial mode with a valid target position
+      if (!tutorialMode || fixedSpotlightX === null || fixedSpotlightY === null) {
+        return; // Don't draw anything
+      }
+
+      // Scale radius for physical pixels (Retina)
+      const dpr = window.devicePixelRatio || 1;
+      const physicalRadius = circleRadius * dpr;
+
       ctx.beginPath();
-      ctx.arc(mouseX, mouseY, circleRadius, 0, 2 * Math.PI);
-      ctx.strokeStyle = 'red';
-      ctx.lineWidth = 3;
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, physicalRadius, 0, 2 * Math.PI);
+
+      // Green pulsing glow when highlighting target
+      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
+      ctx.strokeStyle = `rgba(0, 255, 0, ${pulse})`;
+      ctx.shadowColor = `rgba(0, 255, 0, ${pulse})`;
+      ctx.shadowBlur = (15 + Math.sin(Date.now() / 200) * 5) * dpr;
+
+      ctx.lineWidth = 3 * dpr;
       ctx.stroke();
+      ctx.shadowBlur = 0;
     }
 
     function drawHighlight(bbox, instruction) {
@@ -498,12 +526,51 @@
 
     // Listen for global mouse events from main process (works even when clicking other apps)
     if (window.electronAPI) {
+      // Listen for fixed spotlight position from main process (tutorial mode)
+      console.log('Setting up onSetSpotlightPosition listener:', !!window.electronAPI.onSetSpotlightPosition);
+      const dpr = window.devicePixelRatio || 1;
+      console.log('Device pixel ratio:', dpr, 'Canvas:', canvas.width, 'x', canvas.height);
+      console.log('Screen:', window.screen.width, 'x', window.screen.height);
+
+      if (window.electronAPI.onSetSpotlightPosition) {
+        window.electronAPI.onSetSpotlightPosition((coords) => {
+          console.log('=== SPOTLIGHT POSITION RECEIVED ===', coords);
+          logEvent('SPOTLIGHT', { coords: coords ? `${coords.x},${coords.y}` : 'null' });
+          if (coords) {
+            tutorialMode = true;
+            // Don't scale - use coordinates directly
+            // The engine returns coordinates matching the screen space
+            fixedSpotlightX = coords.x;
+            fixedSpotlightY = coords.y;
+            console.log('Tutorial mode: ON, spotlight at', fixedSpotlightX, fixedSpotlightY);
+          } else {
+            // Return to mouse-following mode
+            tutorialMode = false;
+            fixedSpotlightX = null;
+            fixedSpotlightY = null;
+            console.log('Tutorial mode: OFF, following mouse');
+          }
+        });
+      } else {
+        console.error('onSetSpotlightPosition not available in electronAPI!');
+      }
+
+      // Listen for tutorial state changes
+      if (window.electronAPI.onTutorialStateChange) {
+        window.electronAPI.onTutorialStateChange((state) => {
+          console.log('Tutorial state changed:', state);
+          updateUIForState(state);
+        });
+      }
+
       // Global mouse move
       if (window.electronAPI.onGlobalMouseMove) {
         window.electronAPI.onGlobalMouseMove((event) => {
-          // Update spotlight circle position
-          mouseX = event.position.x;
-          mouseY = event.position.y;
+          // Only update spotlight position if NOT in tutorial mode
+          if (!tutorialMode) {
+            mouseX = event.position.x;
+            mouseY = event.position.y;
+          }
 
           if (!window.lastGlobalMoveLog || Date.now() - window.lastGlobalMoveLog > 100) {
             logEvent('mouse-move [GLOBAL]', { x: event.position.x, y: event.position.y });
@@ -549,6 +616,18 @@
             buttonName: buttonNames[event.button],
             clicks: event.clicks
           });
+
+          // Check if click happened while in tutorial mode - advance to next step
+          if (tutorialMode && fixedSpotlightX !== null && fixedSpotlightY !== null) {
+            // Debounce: ignore clicks within 1.5 seconds of last target click
+            const now = Date.now();
+            if ((now - lastTargetClickTime) > 1500) {
+              lastTargetClickTime = now;
+              console.log('Click detected in tutorial mode, advancing to next step...');
+              logEvent('TARGET_CLICK', { x: event.position.x, y: event.position.y });
+              window.electronAPI.notifyTargetClicked();
+            }
+          }
         });
       }
 
@@ -581,18 +660,80 @@
       }
     });
 
-    // Button functionality
-    promptInput.addEventListener('keydown', (e) => {
+    // Submit on Enter key
+    promptInput.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault(); // Prevent new line
         const prompt = promptInput.value.trim();
         if (!prompt) return;
+
         console.log('Starting tutorial:', prompt);
         logEvent('USER_ACTION', { message: 'Start tutorial: ' + prompt });
-        // Optionally, clear the input after submitting
+
+        promptInput.disabled = true;
+        promptInput.placeholder = 'Planning...';
+
+        try {
+          const result = await window.electronAPI.startTutorial(prompt);
+          if (!result.success) {
+            console.error('Tutorial failed:', result.error);
+            logEvent('ERROR', { message: result.error });
+            promptInput.disabled = false;
+            promptInput.placeholder = 'Type your command...';
+          }
+        } catch (error) {
+          console.error('Tutorial error:', error);
+          logEvent('ERROR', { message: error.message || 'Unknown error' });
+          promptInput.disabled = false;
+          promptInput.placeholder = 'Type your command...';
+        }
+
+        // Clear the input after submitting
         promptInput.value = '';
       }
     });
+
+    // Update UI based on tutorial state
+    function updateUIForState(state) {
+      switch (state.mode) {
+        case 'idle':
+          promptInput.disabled = false;
+          promptInput.placeholder = 'Type your command...';
+          break;
+        case 'planning':
+          promptInput.disabled = true;
+          promptInput.placeholder = 'Planning...';
+          break;
+        case 'locating':
+          promptInput.disabled = true;
+          promptInput.placeholder = 'Finding element...';
+          break;
+        case 'highlighting':
+          promptInput.disabled = true;
+          if (state.plan && state.plan.steps && state.plan.steps[state.currentStepIndex]) {
+            const step = state.plan.steps[state.currentStepIndex];
+            promptInput.placeholder = `Step ${state.currentStepIndex + 1}: ${step.instruction}`;
+          } else {
+            promptInput.placeholder = `Step ${state.currentStepIndex + 1}: Click the target`;
+          }
+          break;
+        case 'complete':
+          promptInput.disabled = false;
+          promptInput.placeholder = 'Done! Type next command...';
+          tutorialMode = false;
+          fixedSpotlightX = null;
+          fixedSpotlightY = null;
+          logEvent('TUTORIAL', { message: 'Tutorial completed!' });
+          break;
+        case 'error':
+          promptInput.disabled = false;
+          promptInput.placeholder = 'Type your command...';
+          if (state.error) {
+            logEvent('ERROR', { message: state.error });
+          }
+          break;
+      }
+    }
 
 
 
@@ -611,12 +752,8 @@
     // Start animation loop to show border
     animate();
 
-    // Test highlight
-    setTimeout(() => {
-      drawHighlight([100, 100, 300, 150], 'Click here to test');
-    }, 2000);
-
     console.log('Overlay loaded. Canvas size:', canvas.width, 'x', canvas.height);
+    console.log('Tutorial integration ready.');
   </script>
 </body>
 </html>
