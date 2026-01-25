@@ -86,25 +86,37 @@
       pointer-events: none;
     }
 
-    .control-panel.loading-ball {
-      width: 60px;
-      /* Same height as pill */
-      height: 60px;
-      border-radius: 50%;
-      animation: pulse-ball 0.6s ease-in-out 3;
-      /* Pulse 3 times - faster rate */
-    }
-
-    .control-panel.loading-active {
-      width: 60px;
-      /* Same height as pill */
-      height: 60px;
-      border-radius: 50%;
+    .control-panel.loading-text {
+      width: 150px !important;
+      height: 50px !important;
+      border-radius: 25px !important;
       animation: glow-pulse 2s ease-in-out infinite;
     }
 
     .control-panel.state-processing {
       animation: glow-pulse 2s ease-in-out infinite;
+    }
+
+    /* Loading text display - matches placeholder styling */
+    .loading-text-display {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 16px;
+      font-weight: 300;
+      letter-spacing: 0.3px;
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease-in-out;
+    }
+
+    .control-panel.loading-text .loading-text-display {
+      opacity: 1;
     }
 
     @keyframes liquid-sheen {
@@ -116,20 +128,6 @@
 
       100% {
         transform: translateX(150%) skewX(-20deg);
-      }
-    }
-
-    @keyframes pulse-ball {
-
-      0%,
-      100% {
-        transform: scale(1);
-        box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3);
-      }
-
-      50% {
-        transform: scale(1.05);
-        box-shadow: 0 6px 20px 0 rgba(142, 142, 147, 0.4);
       }
     }
 
@@ -177,40 +175,16 @@
       box-sizing: border-box;
     }
 
-    .control-panel.loading-ball textarea,
-    .control-panel.loading-active textarea {
+    .control-panel.loading-text textarea {
       opacity: 0;
       font-size: 0;
       pointer-events: none;
       /* Disable interaction during loading */
     }
 
-    /* Loading icon */
+    /* Loading icon - hidden, using text instead */
     .loading-icon {
-      position: absolute;
-      width: 24px;
-      height: 24px;
-      opacity: 0;
-      transition: opacity 0.3s ease-in-out;
-      pointer-events: none;
-      filter: invert(1);
-      /* Make the black SVG white */
-    }
-
-    .control-panel.loading-ball .loading-icon,
-    .control-panel.loading-active .loading-icon {
-      opacity: 1;
-      animation: spin-icon 1s linear infinite;
-    }
-
-    @keyframes spin-icon {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
+      display: none;
     }
 
 
@@ -388,7 +362,7 @@
 
   <!-- Control Panel -->
   <div class="control-panel" id="controlPanel">
-    <img src="assets/loading-svgrepo-com (1).svg" alt="Loading" class="loading-icon" id="loadingIcon">
+    <div class="loading-text-display" id="loadingTextDisplay"></div>
     <textarea id="promptInput" placeholder="Type your command..."></textarea>
   </div>
 
@@ -439,8 +413,7 @@
 
     function adjustControlPanelHeight() {
       // Skip if in loading state
-      if (controlPanel.classList.contains('loading-ball') ||
-        controlPanel.classList.contains('loading-active')) {
+      if (controlPanel.classList.contains('loading-text')) {
         return;
       }
 
@@ -1078,40 +1051,84 @@
       }
     });
 
-    // Loading animation states
+    // Loading animation states - fun cycling words (Planning always first)
     const loadingMessages = [
-      'thinking',
-      'processing',
-      'determining next step',
-      'analyzing',
-      'computing',
-      'understanding'
+      'Planning',      // Always starts here
+      'Thinking',
+      'Hmm',
+      'Pondering',
+      'Mapping',
+      'Pfft',
+      'Computing',
+      'Vibing',
+      'Processing',
+      'Brewing',
+      'Scheming',
+      'Crunching',
+      'Noodling',
+      'Conjuring',
+      'Mulling',
+      'Calibrating',
+      'Imagining',
+      'Simmering'
     ];
     let loadingCycleCount = 0;
     let loadingTimeout = null;
     let messageIndex = 0;
     let isLoadingActive = false;
+    let loadingCharIndex = 0;
+    let loadingTypeInterval = null;
+    const loadingTextDisplay = document.getElementById('loadingTextDisplay');
+
+    function typeLoadingText(text, onComplete) {
+      loadingCharIndex = 0;
+      loadingTextDisplay.textContent = '';
+
+      if (loadingTypeInterval) {
+        clearInterval(loadingTypeInterval);
+      }
+
+      loadingTypeInterval = setInterval(() => {
+        if (loadingCharIndex < text.length) {
+          loadingTextDisplay.textContent = text.substring(0, loadingCharIndex + 1) + '...';
+          loadingCharIndex++;
+        } else {
+          clearInterval(loadingTypeInterval);
+          loadingTypeInterval = null;
+          if (onComplete) onComplete();
+        }
+      }, 60); // 60ms per character
+    }
 
     function animateLoadingCycle() {
       if (!isLoadingActive) return;
 
-      // Just keep the circle spinning, no status updates
-      loadingTimeout = setTimeout(() => {
-        if (!isLoadingActive) return;
-        loadingCycleCount++;
-        animateLoadingCycle();
-      }, 2000);
+      const currentMessage = loadingMessages[messageIndex];
+
+      typeLoadingText(currentMessage, () => {
+        // Wait a bit after typing completes, then move to next word
+        loadingTimeout = setTimeout(() => {
+          if (!isLoadingActive) return;
+          loadingCycleCount++;
+          // After "Planning", randomly pick from the rest (index 1 onwards)
+          messageIndex = 1 + Math.floor(Math.random() * (loadingMessages.length - 1));
+          animateLoadingCycle();
+        }, 2500); // Show each word for 2.5s after typing completes
+      });
     }
 
     function startLoadingAnimation() {
       loadingCycleCount = 0;
-      messageIndex = 0;
+      messageIndex = 0; // Always start with "Planning"
       isLoadingActive = true;
       promptInput.value = '';
       promptInput.readOnly = true;
 
-      // Show loading circle with glow
-      controlPanel.classList.add('loading-active');
+      // Show loading pill with text - explicitly set dimensions
+      controlPanel.style.width = '150px';
+      controlPanel.style.height = '50px';
+      controlPanel.style.borderRadius = '25px';
+      controlPanel.classList.add('loading-text');
 
       animateLoadingCycle();
     }
@@ -1122,10 +1139,17 @@
         clearTimeout(loadingTimeout);
         loadingTimeout = null;
       }
-      controlPanel.classList.remove('loading-ball', 'loading-active');
+      if (loadingTypeInterval) {
+        clearInterval(loadingTypeInterval);
+        loadingTypeInterval = null;
+      }
+      controlPanel.classList.remove('loading-text');
+      loadingTextDisplay.textContent = '';
 
-      // Reset height to default
+      // Reset to default dimensions
       controlPanel.style.height = DEFAULT_HEIGHT + 'px';
+      controlPanel.style.width = '420px';
+      controlPanel.style.borderRadius = '30px';
       promptInput.value = '';
       promptInput.readOnly = false;
       promptInput.focus();
