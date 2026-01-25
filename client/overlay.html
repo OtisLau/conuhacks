@@ -654,18 +654,43 @@
       ctx.fill();
       ctx.restore();
 
-      // Draw spotlight ring with white/gray pulsing glow
+      // Draw soft organic halo - subtle and delicate
+      const pulse = Math.sin(Date.now() / 400) * 0.1 + 0.9;
+
+      // Soft outer glow - very subtle
+      ctx.save();
+      const outerGlow = ctx.createRadialGradient(
+        fixedSpotlightX, fixedSpotlightY, displayRadius * 0.95,
+        fixedSpotlightX, fixedSpotlightY, displayRadius * 1.12
+      );
+      outerGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      outerGlow.addColorStop(0.4, `rgba(255, 255, 255, ${0.12 * pulse * spotlightOpacity})`);
+      outerGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.06 * pulse * spotlightOpacity})`);
+      outerGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
       ctx.beginPath();
-      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius, 0, 2 * Math.PI);
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius * 1.12, 0, 2 * Math.PI);
+      ctx.fillStyle = outerGlow;
+      ctx.fill();
+      ctx.restore();
 
-      const pulse = Math.sin(Date.now() / 200) * 0.3 + 0.7;
-      ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * spotlightOpacity * 0.7})`;
-      ctx.shadowColor = `rgba(255, 255, 255, ${pulse * 0.6 * spotlightOpacity})`;
-      ctx.shadowBlur = (25 + Math.sin(Date.now() / 200) * 10) * dpr;
+      // Thin bright ring - the main visible edge
+      ctx.save();
+      const ringGlow = ctx.createRadialGradient(
+        fixedSpotlightX, fixedSpotlightY, displayRadius * 0.98,
+        fixedSpotlightX, fixedSpotlightY, displayRadius * 1.04
+      );
+      ringGlow.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      ringGlow.addColorStop(0.3, `rgba(255, 255, 255, ${0.25 * pulse * spotlightOpacity})`);
+      ringGlow.addColorStop(0.5, `rgba(255, 255, 255, ${0.4 * pulse * spotlightOpacity})`);
+      ringGlow.addColorStop(0.7, `rgba(255, 255, 255, ${0.25 * pulse * spotlightOpacity})`);
+      ringGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(fixedSpotlightX, fixedSpotlightY, displayRadius * 1.04, 0, 2 * Math.PI);
+      ctx.fillStyle = ringGlow;
+      ctx.fill();
+      ctx.restore();
     }
 
     function drawHighlight(bbox, instruction) {
