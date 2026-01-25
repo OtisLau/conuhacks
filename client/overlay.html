@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,16 +29,25 @@
 
     .control-panel {
       position: absolute;
-      top: 20px; /* Top right */
-      right: 20px; /* Top right */
-      left: auto; /* Remove left positioning */
-      width: 350px; /* Smaller width */
-      height: 40px; /* Default height */
-      background: linear-gradient(to right, #2a2a2a, #252525); /* More subtle gradient */
+      top: 20px;
+      /* Top right */
+      right: 20px;
+      /* Top right */
+      left: auto;
+      /* Remove left positioning */
+      width: 350px;
+      /* Smaller width */
+      height: 40px;
+      /* Default height */
+      background: linear-gradient(to right, #2a2a2a, #252525);
+      /* More subtle gradient */
       /* backdrop-filter removed */
-      border-radius: 20px; /* Pill-shaped (half of height) */
-      border: 0.5px solid rgba(255, 255, 255, 0.25); /* Very thin white line */
-      box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3); /* Darker shadow for depth */
+      border-radius: 20px;
+      /* Pill-shaped (half of height) */
+      border: 0.5px solid rgba(255, 255, 255, 0.25);
+      /* Very thin white line */
+      box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3);
+      /* Darker shadow for depth */
       z-index: 2;
       pointer-events: auto;
       padding: 0;
@@ -45,28 +55,35 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
+      transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+      /* Smoother easing */
     }
 
     .control-panel.loading-ball {
-      width: 40px;  /* Same height as pill */
+      width: 40px;
+      /* Same height as pill */
       height: 40px;
       border-radius: 50%;
-      animation: pulse-ball 0.6s ease-in-out 3; /* Pulse 3 times - faster rate */
+      animation: pulse-ball 0.6s ease-in-out 3;
+      /* Pulse 3 times - faster rate */
     }
 
     .control-panel.loading-active {
-      width: 40px;  /* Same height as pill */
+      width: 40px;
+      /* Same height as pill */
       height: 40px;
       border-radius: 50%;
       animation: glow-pulse 2s ease-in-out infinite;
     }
 
     @keyframes pulse-ball {
-      0%, 100% {
+
+      0%,
+      100% {
         transform: scale(1);
         box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3);
       }
+
       50% {
         transform: scale(1.05);
         box-shadow: 0 6px 20px 0 rgba(142, 142, 147, 0.4);
@@ -74,9 +91,12 @@
     }
 
     @keyframes glow-pulse {
-      0%, 100% {
+
+      0%,
+      100% {
         box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3);
       }
+
       50% {
         box-shadow: 0 0 30px 5px rgba(255, 255, 255, 0.4), 0 0 15px 2px rgba(255, 255, 255, 0.3);
       }
@@ -89,19 +109,26 @@
 
     textarea {
       width: 100%;
-      height: 40px; /* Default height */
-      line-height: 20px; /* Normal line height for multiline */
+      height: 40px;
+      /* Default height */
+      line-height: 20px;
+      /* Normal line height for multiline */
       background: transparent;
       border: none;
       color: white;
-      font-size: 16px; /* Slightly smaller font */
+      font-size: 16px;
+      /* Slightly smaller font */
       resize: none;
       outline: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      padding: 10px 15px 10px 20px; /* Vertical padding for centering */
-      text-align: left; /* Left align text */
-      transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
-      overflow-y: hidden; /* Hide scrollbar, we'll expand instead */
+      padding: 10px 15px 10px 20px;
+      /* Vertical padding for centering */
+      text-align: left;
+      /* Left align text */
+      transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+      /* Smoother easing */
+      overflow-y: hidden;
+      /* Hide scrollbar, we'll expand instead */
       box-sizing: border-box;
     }
 
@@ -109,7 +136,8 @@
     .control-panel.loading-active textarea {
       opacity: 0;
       font-size: 0;
-      pointer-events: none; /* Disable interaction during loading */
+      pointer-events: none;
+      /* Disable interaction during loading */
     }
 
     /* Loading icon */
@@ -120,7 +148,8 @@
       opacity: 0;
       transition: opacity 0.3s ease-in-out;
       pointer-events: none;
-      filter: invert(1); /* Make the black SVG white */
+      filter: invert(1);
+      /* Make the black SVG white */
     }
 
     .control-panel.loading-ball .loading-icon,
@@ -133,6 +162,7 @@
       from {
         transform: rotate(0deg);
       }
+
       to {
         transform: rotate(360deg);
       }
@@ -140,8 +170,10 @@
 
 
     textarea::placeholder {
-      color: rgba(255, 255, 255, 0.4); /* Lighter placeholder */
-      font-weight: 300; /* Lighter font weight */
+      color: rgba(255, 255, 255, 0.4);
+      /* Lighter placeholder */
+      font-weight: 300;
+      /* Lighter font weight */
     }
 
     /* Mouse event log - hidden for now */
@@ -175,9 +207,12 @@
       transform: translateX(-50%);
       z-index: 3;
       pointer-events: none;
-      width: 48px; /* Slightly larger for visibility */
-      height: 48px; /* Slightly larger for visibility */
-      background: rgba(142, 142, 147, 0.2); /* Grey background */
+      width: 48px;
+      /* Slightly larger for visibility */
+      height: 48px;
+      /* Slightly larger for visibility */
+      background: rgba(142, 142, 147, 0.2);
+      /* Grey background */
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -186,19 +221,28 @@
     }
 
     .scroll-arrow-svg {
-      width: 60%; /* SVG size relative to container */
+      width: 60%;
+      /* SVG size relative to container */
       height: 60%;
-      filter: invert(50%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(150%) contrast(100%); /* Make SVG grey/white */
+      filter: invert(50%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(150%) contrast(100%);
+      /* Make SVG grey/white */
       animation: bounce-svg 2s infinite;
     }
 
     @keyframes bounce-svg {
-      0%, 20%, 50%, 80%, 100% {
+
+      0%,
+      20%,
+      50%,
+      80%,
+      100% {
         transform: translateY(0);
       }
+
       40% {
         transform: translateY(6px);
       }
+
       60% {
         transform: translateY(3px);
       }
@@ -209,10 +253,12 @@
         background: rgba(142, 142, 147, 0.2);
         box-shadow: 0 0 10px rgba(142, 142, 147, 0.2);
       }
+
       50% {
         background: rgba(142, 142, 147, 0.4);
         box-shadow: 0 0 20px rgba(142, 142, 147, 0.5);
       }
+
       100% {
         background: rgba(142, 142, 147, 0.2);
         box-shadow: 0 0 10px rgba(142, 142, 147, 0.2);
@@ -230,7 +276,8 @@
       border-radius: 20px;
       border: 1px solid rgba(255, 255, 255, 0.2);
       box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
-      z-index: 3; /* Higher than control-panel */
+      z-index: 3;
+      /* Higher than control-panel */
       pointer-events: auto;
       color: white;
       display: flex;
@@ -257,6 +304,7 @@
       font-size: 12px;
       transition: background 0.2s;
     }
+
     .instruction-done-btn:hover {
       background: rgba(255, 255, 255, 0.4);
     }
@@ -284,21 +332,20 @@
       transition: background 0.2s;
       width: 48%;
     }
+
     .instruction-nav-btn:hover {
       background: rgba(255, 255, 255, 0.3);
     }
   </style>
 </head>
+
 <body>
   <canvas id="overlay-canvas"></canvas>
 
   <!-- Control Panel -->
   <div class="control-panel" id="controlPanel">
     <img src="assets/loading-svgrepo-com (1).svg" alt="Loading" class="loading-icon" id="loadingIcon">
-    <textarea
-      id="promptInput"
-      placeholder="Type your command..."
-    ></textarea>
+    <textarea id="promptInput" placeholder="Type your command..."></textarea>
   </div>
 
   <!-- Status Bar (appears below loading circle) -->
@@ -352,7 +399,7 @@
     function adjustControlPanelHeight() {
       // Skip if in loading state
       if (controlPanel.classList.contains('loading-ball') ||
-          controlPanel.classList.contains('loading-active')) {
+        controlPanel.classList.contains('loading-active')) {
         return;
       }
 
@@ -484,7 +531,11 @@
     }
 
     function drawHighlight(bbox, instruction) {
-      currentHighlight = { bbox, instruction };
+      currentHighlight = {
+        bbox,
+        instruction,
+        startTime: Date.now() // Track when we started showing this
+      };
       if (!animationId) {
         animate();
       }
@@ -537,9 +588,9 @@
         // Arrow pointing to element
         ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
         ctx.beginPath();
-        ctx.moveTo(x1 + w/2, y2 + 5);
-        ctx.lineTo(x1 + w/2 - 8, y2 + 15);
-        ctx.lineTo(x1 + w/2 + 8, y2 + 15);
+        ctx.moveTo(x1 + w / 2, y2 + 5);
+        ctx.lineTo(x1 + w / 2 - 8, y2 + 15);
+        ctx.lineTo(x1 + w / 2 + 8, y2 + 15);
         ctx.closePath();
         ctx.fill();
 
@@ -554,7 +605,25 @@
         ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(instruction, boxX + 10, tooltipY + boxHeight / 2);
+        // Tooltip text - with typing effect
+        const typingSpeed = 30; // ms per char
+        const elapsed = Date.now() - (instruction ? currentHighlight.startTime : 0);
+        const charsToShow = Math.floor(elapsed / typingSpeed);
+        const textToDisplay = instruction.substring(0, charsToShow);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(textToDisplay, boxX + 10, tooltipY + boxHeight / 2);
+
+        // Cursor effect for tooltip
+        if (charsToShow < instruction.length) {
+          const measuredWidth = ctx.measureText(textToDisplay).width;
+          if (Math.floor(Date.now() / 500) % 2 === 0) {
+            ctx.fillRect(boxX + 10 + measuredWidth + 2, tooltipY + boxHeight / 2 - 7, 2, 14);
+          }
+        }
       }
 
       animationId = requestAnimationFrame(animate);
@@ -945,10 +1014,24 @@
           break;
       }
 
-      promptInput.placeholder = placeholderText;
+      // Stop any existing typewriter on the input
+      stopTypewriter('input_placeholder');
 
-      // Adjust height for long placeholder text
-      setTimeout(() => adjustHeightForPlaceholder(placeholderText), 50);
+
+      // Start typing effect if there is text
+      if (placeholderText) {
+        // Clear it first
+        promptInput.placeholder = '';
+
+        startTypewriter('input_placeholder', placeholderText, (text) => {
+          promptInput.placeholder = text;
+          adjustHeightForPlaceholder(text);
+        });
+      } else {
+        promptInput.placeholder = '';
+        adjustHeightForPlaceholder('');
+      }
+
     }
 
     // Adjust height based on placeholder text length
@@ -1037,6 +1120,40 @@
     // Start animation loop to show border
     animate();
 
+    // Typewriter effect handler
+    const activeTypewriters = {};
+
+    function startTypewriter(id, text, callback, speed = 30) {
+      // Clear existing typewriter for this ID
+      if (activeTypewriters[id]) {
+        clearInterval(activeTypewriters[id].interval);
+      }
+
+      let i = 0;
+      activeTypewriters[id] = {
+        interval: setInterval(() => {
+          if (i < text.length) {
+            callback(text.substring(0, i + 1));
+            i++;
+          } else {
+            clearInterval(activeTypewriters[id].interval);
+            delete activeTypewriters[id];
+          }
+        }, speed),
+        fullText: text
+      };
+
+      // Initial empty state
+      callback('');
+    }
+
+    function stopTypewriter(id) {
+      if (activeTypewriters[id]) {
+        clearInterval(activeTypewriters[id].interval);
+        delete activeTypewriters[id];
+      }
+    }
+
     // Auto-focus the input field on load
     promptInput.focus();
 
@@ -1044,4 +1161,5 @@
     console.log('Tutorial integration ready.');
   </script>
 </body>
+
 </html>
