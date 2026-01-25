@@ -26,82 +26,45 @@
       z-index: 1;
     }
 
-    /* Control panel - floating text box */
+    /* Control panel - small centered liquid glass input bar */
     .control-panel {
       position: absolute;
-      top: 20px;
-      left: 20px;
-      width: 400px;
-      background: rgba(26, 26, 26, 0.95);
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(0, 255, 0, 0.2);
+      top: 50%; /* Center vertically */
+      left: 50%; /* Center horizontally */
+      transform: translate(-50%, -50%); /* Adjust for element's own size */
+      width: 300px; /* Smaller width */
+      height: 40px; /* Smaller height */
+      background: rgba(255, 255, 255, 0.1); /* Lighter, more glassy background */
+      backdrop-filter: blur(20px) saturate(180%); /* Key for frosted glass */
+      border-radius: 10px; /* Smaller rounded corners */
+      border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border */
+      box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.1); /* Softer shadow */
       z-index: 2;
       pointer-events: auto;
-    }
-
-    .logo {
-      font-size: 24px;
-      font-weight: bold;
-      margin-bottom: 15px;
-      color: #ffffff;
-      user-select: none;
-    }
-
-    .logo span {
-      color: #00ff00;
-    }
-
-    .input-area {
-      background: #2a2a2a;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
     }
 
     textarea {
       width: 100%;
-      height: 80px;
+      height: 100%; /* Fill the container */
+      line-height: 40px; /* Match height */
       background: transparent;
       border: none;
       color: white;
-      font-size: 14px;
+      font-size: 16px; /* Slightly smaller font */
       resize: none;
       outline: none;
-      font-family: inherit;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      padding: 0 15px; /* Horizontal padding */
+      text-align: center; /* Center the text */
     }
 
     textarea::placeholder {
-      color: #666;
-    }
-
-    .start-btn {
-      width: 100%;
-      padding: 12px;
-      background: #00ff00;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      color: #000;
-      transition: background 0.2s;
-    }
-
-    .start-btn:hover {
-      background: #00cc00;
-    }
-
-    .start-btn:active {
-      background: #00aa00;
-    }
-
-    .start-btn:disabled {
-      background: #333;
-      color: #666;
-      cursor: not-allowed;
+      color: rgba(255, 255, 255, 0.4); /* Lighter placeholder */
+      font-weight: 300; /* Lighter font weight */
     }
 
     .quit-btn {
@@ -147,11 +110,11 @@
       padding: 12px;
       font-family: 'Monaco', 'Courier New', monospace;
       font-size: 11px;
-      color: #00ff00;
+      color: #8e8e93;
       overflow-y: auto;
       z-index: 2;
       pointer-events: none;
-      border: 1px solid rgba(0, 255, 0, 0.3);
+      border: 1px solid rgba(142, 142, 147, 0.3);
     }
 
     .event-log-entry {
@@ -164,7 +127,7 @@
     }
 
     .event-log-entry .event-type {
-      color: #00ffff;
+      color: #8e8e93;
       font-weight: bold;
     }
 
@@ -180,49 +143,47 @@
       transform: translateX(-50%);
       z-index: 3;
       pointer-events: none;
-      width: 40px;
-      height: 40px;
-      background: rgba(0, 255, 0, 0.2);
+      width: 48px; /* Slightly larger for visibility */
+      height: 48px; /* Slightly larger for visibility */
+      background: rgba(142, 142, 147, 0.2); /* Grey background */
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      animation: pulse-background 2s infinite ease-in-out;
+      animation: pulse-background-grey 2s infinite ease-in-out;
     }
 
-    .scroll-arrow {
-      width: 12px;
-      height: 12px;
-      border-left: 3px solid #00ff00;
-      border-bottom: 3px solid #00ff00;
-      transform: rotate(-45deg);
-      animation: bounce 2s infinite;
+    .scroll-arrow-svg {
+      width: 60%; /* SVG size relative to container */
+      height: 60%;
+      filter: invert(50%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(150%) contrast(100%); /* Make SVG grey/white */
+      animation: bounce-svg 2s infinite;
     }
 
-    @keyframes bounce {
+    @keyframes bounce-svg {
       0%, 20%, 50%, 80%, 100% {
-        transform: translateY(0) rotate(-45deg);
+        transform: translateY(0);
       }
       40% {
-        transform: translateY(4px) rotate(-45deg);
+        transform: translateY(6px);
       }
       60% {
-        transform: translateY(2px) rotate(-45deg);
+        transform: translateY(3px);
       }
     }
 
-    @keyframes pulse-background {
+    @keyframes pulse-background-grey {
       0% {
-        background: rgba(0, 255, 0, 0.2);
-        box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+        background: rgba(142, 142, 147, 0.2);
+        box-shadow: 0 0 10px rgba(142, 142, 147, 0.2);
       }
       50% {
-        background: rgba(0, 255, 0, 0.4);
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        background: rgba(142, 142, 147, 0.4);
+        box-shadow: 0 0 20px rgba(142, 142, 147, 0.5);
       }
       100% {
-        background: rgba(0, 255, 0, 0.2);
-        box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
+        background: rgba(142, 142, 147, 0.2);
+        box-shadow: 0 0 10px rgba(142, 142, 147, 0.2);
       }
     }
   </style>
@@ -243,14 +204,10 @@
 
   <!-- Control Panel -->
   <div class="control-panel" id="controlPanel">
-    <div class="logo">CON<span>U</span></div>
-    <div class="input-area">
-      <textarea
-        id="promptInput"
-        placeholder="What do you want to do? e.g., 'Turn on Dark Mode'"
-      ></textarea>
-    </div>
-    <button class="start-btn" id="startBtn" disabled>Start Tutorial</button>
+    <textarea
+      id="promptInput"
+      placeholder="Type your command..."
+    ></textarea>
   </div>
 
   <!-- Mouse Event Log -->
@@ -260,7 +217,7 @@
 
   <!-- Scroll Indicator -->
   <div class="scroll-indicator" id="scrollIndicator">
-    <div class="scroll-arrow"></div>
+    <img src="down-arrow-backup-2-svgrepo-com.svg" alt="Scroll Down" class="scroll-arrow-svg" />
   </div>
 
   <script>
@@ -268,7 +225,6 @@
     const ctx = canvas.getContext('2d');
     const controlPanel = document.getElementById('controlPanel');
     const promptInput = document.getElementById('promptInput');
-    const startBtn = document.getElementById('startBtn');
     const eventLog = document.getElementById('eventLog');
     const quitBtn = document.getElementById('quitBtn');
     const captureToggle = document.getElementById('captureClicksToggle');
@@ -299,7 +255,7 @@
 
     // Draw border to show overlay bounds
     function drawBorder() {
-      ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+      ctx.strokeStyle = 'rgba(142, 142, 147, 0.3)';
       ctx.lineWidth = 2;
       ctx.setLineDash([10, 5]);
       ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
@@ -347,15 +303,15 @@
       const glowSize = 10 + Math.sin(pulsePhase) * 5;
 
       // Outer glow
-      ctx.shadowColor = `rgba(0, 255, 0, ${pulse})`;
+      ctx.shadowColor = `rgba(142, 142, 147, ${pulse})`;
       ctx.shadowBlur = glowSize;
-      ctx.strokeStyle = '#00ff00';
+      ctx.strokeStyle = '#8e8e93';
       ctx.lineWidth = 3;
       ctx.strokeRect(x1 - 5, y1 - 5, w + 10, h + 10);
 
       // Inner highlight
       ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+      ctx.fillStyle = 'rgba(142, 142, 147, 0.1)';
       ctx.fillRect(x1, y1, w, h);
 
       // Instruction tooltip
@@ -574,15 +530,16 @@
     });
 
     // Button functionality
-    startBtn.addEventListener('click', () => {
-      const prompt = promptInput.value.trim();
-      if (!prompt) return;
-      console.log('Starting tutorial:', prompt);
-      logEvent('USER_ACTION', { message: 'Start tutorial: ' + prompt });
-    });
-
-    promptInput.addEventListener('input', () => {
-      startBtn.disabled = !promptInput.value.trim();
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); // Prevent new line
+        const prompt = promptInput.value.trim();
+        if (!prompt) return;
+        console.log('Starting tutorial:', prompt);
+        logEvent('USER_ACTION', { message: 'Start tutorial: ' + prompt });
+        // Optionally, clear the input after submitting
+        promptInput.value = '';
+      }
     });
 
     // Quit button - disable click-through when hovering
