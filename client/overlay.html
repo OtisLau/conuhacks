@@ -37,13 +37,14 @@
       /* Remove left positioning */
       width: 420px;
       /* Bigger width */
-      height: 50px;
+      /* Bigger width */
+      height: 60px;
       /* Bigger height */
       /* Liquid glass effect */
       background: rgba(28, 28, 30, 0.85);
       /* Less clear/more opaque */
       backdrop-filter: blur(20px) saturate(180%);
-      border-radius: 25px;
+      border-radius: 30px;
       /* Pill-shaped (half of height) */
       border: 0.5px solid rgba(255, 255, 255, 0.15);
       /* Even thinner/more transparent line */
@@ -75,18 +76,18 @@
     }
 
     .control-panel.loading-ball {
-      width: 50px;
+      width: 60px;
       /* Same height as pill */
-      height: 50px;
+      height: 60px;
       border-radius: 50%;
       animation: pulse-ball 0.6s ease-in-out 3;
       /* Pulse 3 times - faster rate */
     }
 
     .control-panel.loading-active {
-      width: 50px;
+      width: 60px;
       /* Same height as pill */
-      height: 50px;
+      height: 60px;
       border-radius: 50%;
       animation: glow-pulse 2s ease-in-out infinite;
     }
@@ -140,7 +141,7 @@
 
     textarea {
       width: 100%;
-      height: 50px;
+      height: 60px;
       /* Default height */
       line-height: 20px;
       /* Normal line height for multiline */
@@ -152,8 +153,8 @@
       resize: none;
       outline: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      padding: 10px 15px 10px 20px;
-      /* Vertical padding for centering */
+      padding: 20px 25px 20px 25px;
+      /* Vertical padding 20px for centering (60px height - 20px line height) / 2 */
       text-align: left;
       /* Left align text */
       transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
@@ -422,10 +423,10 @@
     const eventLog = document.getElementById('eventLog');
 
     // Auto-resize control panel based on textarea content
-    const DEFAULT_HEIGHT = 50;
+    const DEFAULT_HEIGHT = 60;
     const MAX_HEIGHT = 200; // Maximum height to prevent excessive expansion
     const LINE_HEIGHT = 20; // Line height from CSS
-    const PADDING_VERTICAL = 20; // 10px top + 10px bottom
+    const PADDING_VERTICAL = 40; // 15px top + 25px bottom
 
     function adjustControlPanelHeight() {
       // Skip if in loading state
@@ -475,7 +476,7 @@
         }
       }
 
-      controlPanel.style.borderRadius = '25px';
+      controlPanel.style.borderRadius = '30px';
     }
 
     // Set initial height explicitly
