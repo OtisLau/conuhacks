@@ -26,19 +26,19 @@
       z-index: 1;
     }
 
-    /* Control panel - small centered liquid glass input bar */
     .control-panel {
       position: absolute;
-      top: 50%; /* Center vertically */
-      left: 50%; /* Center horizontally */
-      transform: translate(-50%, -50%); /* Adjust for element's own size */
+      top: 20px; /* Top right */
+      right: 20px; /* Top right */
+      left: auto; /* Remove left positioning */
+      transform: none; /* Remove transform */
       width: 300px; /* Smaller width */
       height: 40px; /* Smaller height */
-      background: rgba(255, 255, 255, 0.1); /* Lighter, more glassy background */
-      backdrop-filter: blur(20px) saturate(180%); /* Key for frosted glass */
-      border-radius: 10px; /* Smaller rounded corners */
-      border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border */
-      box-shadow: 0 4px 16px 0 rgba(31, 38, 135, 0.1); /* Softer shadow */
+      background: linear-gradient(to right, #2a2a2a, #252525); /* More subtle gradient */
+      /* backdrop-filter removed */
+      border-radius: 20px; /* Pill-shaped (half of height) */
+      border: 0.5px solid rgba(255, 255, 255, 0.25); /* Very thin white line */
+      box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3); /* Darker shadow for depth */
       z-index: 2;
       pointer-events: auto;
       padding: 0;
@@ -50,7 +50,7 @@
     textarea {
       width: 100%;
       height: 100%; /* Fill the container */
-      line-height: 40px; /* Match height */
+      line-height: 40px; /* Match container height for vertical centering */
       background: transparent;
       border: none;
       color: white;
@@ -58,43 +58,13 @@
       resize: none;
       outline: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      padding: 0 15px; /* Horizontal padding */
-      text-align: center; /* Center the text */
+      padding: 0 15px 0 20px; /* Horizontal padding only */
+      text-align: left; /* Align text to left */
     }
 
     textarea::placeholder {
       color: rgba(255, 255, 255, 0.4); /* Lighter placeholder */
       font-weight: 300; /* Lighter font weight */
-    }
-
-    .quit-btn {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      padding: 12px 24px;
-      background: rgba(255, 0, 0, 0.95);
-      border: 2px solid rgba(255, 255, 255, 0.8);
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: bold;
-      cursor: pointer;
-      color: #fff;
-      transition: all 0.2s;
-      z-index: 9999;
-      pointer-events: auto;
-      box-shadow: 0 4px 16px rgba(255, 0, 0, 0.5);
-      text-transform: uppercase;
-    }
-
-    .quit-btn:hover {
-      background: rgb(255, 0, 0);
-      border-color: #fff;
-      transform: scale(1.1);
-      box-shadow: 0 6px 24px rgba(255, 0, 0, 0.8);
-    }
-
-    .quit-btn:active {
-      transform: scale(0.95);
     }
 
     /* Mouse event log */
@@ -260,8 +230,7 @@
 <body>
   <canvas id="overlay-canvas"></canvas>
 
-  <!-- Quit Button -->
-  <button class="quit-btn" id="quitBtn">Quit (Cmd+Q / ESC)</button>
+
 
   <!-- Click Capture Toggle -->
   <div style="position: absolute; top: 70px; right: 20px; z-index: 9999; pointer-events: auto;">
@@ -310,7 +279,6 @@
     const controlPanel = document.getElementById('controlPanel');
     const promptInput = document.getElementById('promptInput');
     const eventLog = document.getElementById('eventLog');
-    const quitBtn = document.getElementById('quitBtn');
     const captureToggle = document.getElementById('captureClicksToggle');
 
     // Prevent accidental quits on startup
@@ -626,48 +594,7 @@
       }
     });
 
-    // Quit button - disable click-through when hovering
-    quitBtn.addEventListener('mouseenter', () => {
-      console.log('QUIT BUTTON HOVERED - disabling click-through');
-      logEvent('UI_EVENT', { message: 'Quit button hovered' });
-      if (window.electronAPI) {
-        window.electronAPI.send('set-click-through', false);
-      }
-    });
 
-    quitBtn.addEventListener('mouseleave', () => {
-      console.log('QUIT BUTTON LEFT - enabling click-through');
-      if (window.electronAPI) {
-        window.electronAPI.send('set-click-through', true);
-      }
-    });
-
-    quitBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (!quitButtonReady) {
-        console.log('Quit button not ready yet (preventing accidental quit on startup)');
-        return;
-      }
-
-      console.log('===== QUIT BUTTON CLICKED! =====');
-      logEvent('UI_EVENT', { message: 'QUIT BUTTON CLICKED' });
-
-      if (window.electronAPI) {
-        console.log('Sending quit-app IPC...');
-        window.electronAPI.send('quit-app');
-
-        // Backup: force quit after 500ms if IPC doesn't work
-        setTimeout(() => {
-          console.error('IPC quit failed, showing alert');
-          alert('Quit failed! Press Escape or Cmd+Q to force quit, or run ./kill.sh');
-        }, 500);
-      } else {
-        console.error('electronAPI not available!');
-        alert('electronAPI not available! Run ./kill.sh to force quit');
-      }
-    });
 
     // Click capture toggle - this disables click-through so we can log clicks
     captureToggle.addEventListener('change', () => {
