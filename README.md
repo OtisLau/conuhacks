@@ -13,7 +13,7 @@ Beacon is an intelligent desktop assistant that provides real-time, step-by-step
 
 ### 👁️ Smart Element Detection
 - **OCR-based text detection** - Finds buttons, labels, and UI text
-- **Icon recognition** - Identifies visual elements using OmniParser
+- **AI-powered region detection** - Custom algorithm using Gemini for intelligent UI element identification
 - **Hybrid locator** - Combines multiple detection methods for accuracy
 - **Region-aware** - Understands screen regions (menu bar, dock, main content)
 
@@ -51,7 +51,7 @@ Beacon is an intelligent desktop assistant that provides real-time, step-by-step
 - **AI**: Google Gemini - Natural language understanding and task planning
 - **Vision**:
   - Tesseract OCR - Text detection
-  - OmniParser - Icon and element detection
+  - Custom region detection algorithm with Gemini - AI-powered UI element identification
   - PIL/Pillow - Image processing
 - **Platform**: macOS (with Quartz framework for window management)
 
@@ -86,7 +86,7 @@ For detailed setup instructions, see [BUILD.md](BUILD.md).
 │  ┌───────────────────────────────┐  │
 │  │  Locators                     │  │
 │  │  - OCR (Tesseract)            │  │
-│  │  - Icon detection (OmniParser)│  │
+│  │  - Region detection (Gemini)  │  │
 │  │  - Hybrid locator             │  │
 │  └───────────────────────────────┘  │
 │  ┌───────────────────────────────┐  │
@@ -130,7 +130,6 @@ Built with:
 - [Electron](https://www.electronjs.org/)
 - [Google Gemini AI](https://ai.google.dev/)
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
-- [OmniParser](https://github.com/microsoft/OmniParser)
 - [PyObjC](https://pyobjc.readthedocs.io/)
 
 ---
