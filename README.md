@@ -1,8 +1,8 @@
-# CONU
+# Beacon
 
 **AI-Powered Screen Tutorial Guide**
 
-CONU is an intelligent desktop assistant that provides real-time, step-by-step guidance for any task on your screen. Simply describe what you want to do, and CONU will analyze your screen, create a plan, and guide you through each step with visual overlays.
+Beacon is an intelligent desktop assistant that provides real-time, step-by-step guidance for any task on your screen. Simply describe what you want to do, and Beacon will analyze your screen, create a plan, and guide you through each step with visual overlays.
 
 ## Features
 
@@ -39,10 +39,10 @@ CONU is an intelligent desktop assistant that provides real-time, step-by-step g
 ## How It Works
 
 1. **Describe your task** - Type what you want to do in natural language
-2. **AI analyzes your screen** - CONU captures your screen and uses AI to understand the context
+2. **AI analyzes your screen** - Beacon captures your screen and uses AI to understand the context
 3. **Plan generation** - Creates a step-by-step plan to accomplish your task
 4. **Visual guidance** - Highlights elements and shows instructions in real-time
-5. **Progress tracking** - Follow along as CONU guides you through each step
+5. **Progress tracking** - Follow along as Beacon guides you through each step
 
 ## Tech Stack
 
@@ -99,7 +99,7 @@ For detailed setup instructions, see [BUILD.md](BUILD.md).
 
 ## Project Status
 
-CONU is currently in active development (v0.1.0). Core features are functional, but the project is evolving rapidly.
+Beacon is currently in active development (v0.1.0). Core features are functional, but the project is evolving rapidly.
 
 ### Current Capabilities
 - ✅ Task planning with AI
@@ -118,7 +118,7 @@ CONU is currently in active development (v0.1.0). Core features are functional, 
 
 ## Contributing
 
-CONU is an open-source project. Contributions are welcome! See [BUILD.md](BUILD.md) for development setup.
+Beacon is an open-source project. Contributions are welcome! See [BUILD.md](BUILD.md) for development setup.
 
 ## License
 
@@ -135,4 +135,4 @@ Built with:
 
 ---
 
-**Note**: CONU requires accessibility permissions on macOS to capture screenshots and detect UI elements. You'll be prompted to grant these permissions when you first run the app.
+**Note**: Beacon requires accessibility permissions on macOS to capture screenshots and detect UI elements. You'll be prompted to grant these permissions when you first run the app.
