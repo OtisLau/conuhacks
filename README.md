@@ -1,90 +1,138 @@
 # CONU
 
-AI Screen Tutorial Guide - An Electron app with Python backend.
+**AI-Powered Screen Tutorial Guide**
 
-## Project Structure
+CONU is an intelligent desktop assistant that provides real-time, step-by-step guidance for any task on your screen. Simply describe what you want to do, and CONU will analyze your screen, create a plan, and guide you through each step with visual overlays.
+
+## Features
+
+### 🤖 AI-Powered Task Planning
+- Powered by Google Gemini AI to understand natural language tasks
+- Automatically generates step-by-step plans based on your screen context
+- Adapts to your current application and UI state
+
+### 👁️ Smart Element Detection
+- **OCR-based text detection** - Finds buttons, labels, and UI text
+- **Icon recognition** - Identifies visual elements using OmniParser
+- **Hybrid locator** - Combines multiple detection methods for accuracy
+- **Region-aware** - Understands screen regions (menu bar, dock, main content)
+
+### 🎯 Visual Overlay Interface
+- Non-intrusive transparent overlay
+- Highlights UI elements you need to interact with
+- Shows step progress and instructions
+- Click-through design that doesn't interfere with your workflow
+
+### 🚀 Real-time Guidance
+- Takes screenshots to understand your current context
+- Provides contextual help based on what's on screen
+- Guides you through complex multi-step workflows
+
+## Use Cases
+
+- **Learn new software** - Get guided tours of unfamiliar applications
+- **Workflow assistance** - Step-by-step help for complex tasks
+- **UI automation preparation** - Plan and visualize automation sequences
+- **Accessibility** - Visual guidance for navigation and interaction
+- **Documentation** - Record and share step-by-step procedures
+
+## How It Works
+
+1. **Describe your task** - Type what you want to do in natural language
+2. **AI analyzes your screen** - CONU captures your screen and uses AI to understand the context
+3. **Plan generation** - Creates a step-by-step plan to accomplish your task
+4. **Visual guidance** - Highlights elements and shows instructions in real-time
+5. **Progress tracking** - Follow along as CONU guides you through each step
+
+## Tech Stack
+
+- **Frontend**: Electron - Cross-platform desktop app with transparent overlay
+- **Backend**: Python - AI processing, vision, and OCR
+- **AI**: Google Gemini - Natural language understanding and task planning
+- **Vision**:
+  - Tesseract OCR - Text detection
+  - OmniParser - Icon and element detection
+  - PIL/Pillow - Image processing
+- **Platform**: macOS (with Quartz framework for window management)
+
+## Quick Start
+
+1. Clone the repository
+2. Follow the [build instructions](BUILD.md)
+3. Set up your Google API key
+4. Run `npm start` in the client directory
+5. Start getting guided!
+
+For detailed setup instructions, see [BUILD.md](BUILD.md).
+
+## Architecture
 
 ```
-conu/
-├── client/       # Electron desktop app
-├── engine/       # Python backend (AI/vision processing)
-└── api_test/     # API testing scripts
+┌─────────────────────────────────────┐
+│   Electron Desktop App (Client)    │
+│  - Transparent overlay              │
+│  - User input capture               │
+│  - Visual highlighting              │
+└─────────────┬───────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────┐
+│    Python Engine (Backend)          │
+│  ┌───────────────────────────────┐  │
+│  │  Planner (Gemini AI)          │  │
+│  │  - Task understanding         │  │
+│  │  - Plan generation            │  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │  Locators                     │  │
+│  │  - OCR (Tesseract)            │  │
+│  │  - Icon detection (OmniParser)│  │
+│  │  - Hybrid locator             │  │
+│  └───────────────────────────────┘  │
+│  ┌───────────────────────────────┐  │
+│  │  Region Manager               │  │
+│  │  - Screen region detection    │  │
+│  │  - Context awareness          │  │
+│  └───────────────────────────────┘  │
+└─────────────────────────────────────┘
 ```
 
-## Prerequisites
+## Project Status
 
-- Python 3.13+
-- Node.js 18+
-- Tesseract OCR (`brew install tesseract` on macOS)
+CONU is currently in active development (v0.1.0). Core features are functional, but the project is evolving rapidly.
 
-## Setup
+### Current Capabilities
+- ✅ Task planning with AI
+- ✅ Screen capture and analysis
+- ✅ Element detection (OCR + icons)
+- ✅ Visual overlay system
+- ✅ macOS support
 
-### 1. Engine (Python Backend)
+### Roadmap
+- 🔄 Enhanced element detection accuracy
+- 🔄 Interactive tutorial mode
+- 🔄 Multi-monitor support
+- 📋 Windows/Linux support
+- 📋 Tutorial recording and playback
+- 📋 Cloud sync for saved tutorials
 
-```bash
-cd engine
-./setup.sh
-# Or manually:
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+## Contributing
 
-### 2. API Test Environment
+CONU is an open-source project. Contributions are welcome! See [BUILD.md](BUILD.md) for development setup.
 
-```bash
-cd api_test
-./setup.sh
-# Or manually:
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
+## License
 
-### 3. Client (Electron App)
+MIT License - See LICENSE file for details
 
-```bash
-cd client
-npm install
-```
+## Credits
 
-## Environment Variables
+Built with:
+- [Electron](https://www.electronjs.org/)
+- [Google Gemini AI](https://ai.google.dev/)
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
+- [OmniParser](https://github.com/microsoft/OmniParser)
+- [PyObjC](https://pyobjc.readthedocs.io/)
 
-Create a `.env` file in the root directory with your API keys:
+---
 
-```
-GOOGLE_API_KEY=your_gemini_api_key
-```
-
-## Running
-
-### Start the Electron client:
-```bash
-cd client
-npm start
-```
-
-### Run in dev mode:
-```bash
-cd client
-npm run dev
-```
-
-### Run the engine CLI:
-```bash
-cd engine
-source venv/bin/activate
-python -m engine
-```
-
-## Activating Virtual Environments
-
-After setup, activate the Python environment before running:
-
-```bash
-# For engine
-source engine/venv/bin/activate
-
-# For api_test
-source api_test/venv/bin/activate
-```
+**Note**: CONU requires accessibility permissions on macOS to capture screenshots and detect UI elements. You'll be prompted to grant these permissions when you first run the app.
