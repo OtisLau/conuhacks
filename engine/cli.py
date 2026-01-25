@@ -39,8 +39,8 @@ def get_planner():
     return GeminiPlanner()
 
 
-def take_screenshot(output_path: Optional[str] = None) -> Image.Image:
-    """Take a screenshot using macOS screencapture."""
+def take_screenshot(output_path: Optional[str] = None):
+    """Take a screenshot using macOS screencapture. Returns (image, scale_factor)."""
     from engine.utils.image import take_screenshot as _take_screenshot
     return _take_screenshot(output_path)
 
@@ -240,8 +240,10 @@ def cmd_locate(args):
         if quad:
             print(f"Quad: {quad}")
 
+    # Use fast mode if --fast flag or no instruction
     locator = get_locator()
-    result = locator.locate(img, target, region=region, is_icon=args.icon, instruction=instruction, quad=quad)
+    skip_verify = args.fast or not instruction
+    result = locator.locate(img, target, region=region, is_icon=args.icon, instruction=instruction, quad=quad, skip_verification=skip_verify)
 
     # JSON output mode for programmatic access
     if args.json:
@@ -440,6 +442,7 @@ def main():
     locate_parser.add_argument("--show", "-s", action="store_true", help="Show result image")
     locate_parser.add_argument("--output", "-o", help="Output image path")
     locate_parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
+    locate_parser.add_argument("--fast", "-f", action="store_true", help="Skip Gemini verification for speed")
 
     # plan command
     plan_parser = subparsers.add_parser("plan", help="Generate a plan")

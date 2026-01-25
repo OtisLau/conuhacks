@@ -53,11 +53,12 @@ async function generatePlan(screenshotPath, task) {
   throw new Error('Could not parse plan JSON from output');
 }
 
-async function locateElement(screenshotPath, target, region = 'full', isIcon = false, instruction = '', quad = null) {
+async function locateElement(screenshotPath, target, region = 'full', isIcon = false, instruction = '', quad = null, fast = true) {
   const args = [screenshotPath, target, '-r', region, '--json'];
   if (isIcon) args.push('-i');
   if (instruction) args.push('--instruction', instruction);
   if (quad) args.push('-q', String(quad));
+  if (fast) args.push('--fast');  // Skip Gemini verification for speed
 
   const output = await runEngineCommand('locate', args);
   // Find JSON in output (may have other text before it)

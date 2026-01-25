@@ -1,7 +1,38 @@
 const { app, BrowserWindow, screen, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 const engineBridge = require('./engine-bridge');
+
+// Wait for screen to stop changing (page loaded)
+async function waitForStableScreen(maxWaitMs = 3000, checkIntervalMs = 150) {
+  let lastSize = 0;
+  let stableCount = 0;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const screenshotPath = await engineBridge.takeScreenshot();
+    const stats = fs.statSync(screenshotPath);
+    const currentSize = stats.size;
+
+    // If file size is similar (within 1%), screen is stable
+    if (lastSize > 0 && Math.abs(currentSize - lastSize) / lastSize < 0.01) {
+      stableCount++;
+      if (stableCount >= 2) {
+        console.log('Screen stable after', Date.now() - startTime, 'ms');
+        fs.unlinkSync(screenshotPath); // Clean up
+        return;
+      }
+    } else {
+      stableCount = 0;
+    }
+
+    lastSize = currentSize;
+    fs.unlinkSync(screenshotPath); // Clean up
+    await new Promise(resolve => setTimeout(resolve, checkIntervalMs));
+  }
+  console.log('Screen stability timeout, proceeding anyway');
+}
 
 let overlayWindow;
 let spotlightWindow;
@@ -147,6 +178,10 @@ function setupIpcHandlers() {
       tutorialState.error = null;
       overlayWindow.webContents.send('tutorial-state-change', tutorialState);
 
+      // Clear any existing spotlight before taking screenshot
+      overlayWindow.webContents.send('set-spotlight-position', null);
+      await new Promise(resolve => setTimeout(resolve, 50));
+
       // Take screenshot
       console.log('Taking screenshot...');
       const screenshotPath = await engineBridge.takeScreenshot();
@@ -180,9 +215,11 @@ function setupIpcHandlers() {
       tutorialState.targetCoords = null;
       overlayWindow.webContents.send('set-spotlight-position', null);
 
-      // Wait for UI to settle after click (2.5s for page transitions)
-      setTimeout(async () => {
+      // Wait for page to load (screen to stabilize)
+      (async () => {
         try {
+          await new Promise(resolve => setTimeout(resolve, 200)); // Brief initial wait
+          await waitForStableScreen(3000, 150); // Wait up to 3s for screen to stabilize
           await executeCurrentStep();
         } catch (error) {
           console.error('Error executing step:', error);
@@ -190,7 +227,7 @@ function setupIpcHandlers() {
           tutorialState.error = error.message;
           overlayWindow.webContents.send('tutorial-state-change', tutorialState);
         }
-      }, 2500);
+      })();
     }
   });
 
@@ -208,10 +245,55 @@ function setupIpcHandlers() {
   });
 }
 
+// Check if a target is a placeholder (contains [brackets])
+function isPlaceholder(target) {
+  return target && target.includes('[') && target.includes(']');
+}
+
+// Extract hint words from instruction for matching suggestions
+function getHintWords(instruction) {
+  // Common words to ignore
+  const stopWords = ['click', 'the', 'on', 'a', 'an', 'your', 'to', 'from', 'in', 'will', 'appear'];
+  const words = instruction.toLowerCase().split(/\s+/);
+  return words.filter(w => w.length > 2 && !stopWords.includes(w));
+}
+
+// Find best matching suggestion based on instruction context
+function findBestSuggestion(suggestions, instruction) {
+  if (!suggestions || suggestions.length === 0) return null;
+
+  const hints = getHintWords(instruction);
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const suggestion of suggestions) {
+    const suggestionLower = suggestion.toLowerCase();
+    let score = 0;
+
+    // Score based on how many hint words match
+    for (const hint of hints) {
+      if (suggestionLower.includes(hint) || hint.includes(suggestionLower)) {
+        score += 10;
+      }
+    }
+
+    // Prefer shorter, cleaner suggestions (likely menu items)
+    if (suggestion.length < 20) score += 2;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = suggestion;
+    }
+  }
+
+  // If no good match found, return first suggestion as fallback
+  return bestMatch || suggestions[0];
+}
+
 // Execute the current step in the tutorial (with retry logic)
 async function executeCurrentStep(retryCount = 0) {
   const MAX_RETRIES = 3;
-  const RETRY_DELAY = 1500; // 1.5 seconds between retries
+  const RETRY_DELAY = 400; // 0.4 seconds between retries
 
   if (!tutorialState.plan || !tutorialState.plan.steps) {
     tutorialState.mode = 'error';
@@ -235,11 +317,15 @@ async function executeCurrentStep(retryCount = 0) {
   tutorialState.mode = 'locating';
   overlayWindow.webContents.send('tutorial-state-change', tutorialState);
 
+  // Hide overlay before taking screenshot so it doesn't appear in the capture
+  overlayWindow.webContents.send('set-spotlight-position', null);
+  await new Promise(resolve => setTimeout(resolve, 50)); // Wait for overlay to clear
+
   // Take fresh screenshot
   const screenshotPath = await engineBridge.takeScreenshot();
 
   // Locate target element (pass instruction and quad for icon detection)
-  const result = await engineBridge.locateElement(
+  let result = await engineBridge.locateElement(
     screenshotPath,
     step.target_text,
     step.region || 'full',
@@ -249,6 +335,35 @@ async function executeCurrentStep(retryCount = 0) {
   );
 
   console.log('Locate result:', JSON.stringify(result));
+
+  // If not found and target is a placeholder, try using suggestions
+  if (!result.found && isPlaceholder(step.target_text) && result.suggestions && result.suggestions.length > 0) {
+    console.log('Target is placeholder, trying suggestions:', result.suggestions);
+
+    // Find best matching suggestion based on instruction
+    const bestSuggestion = findBestSuggestion(result.suggestions, step.instruction || '');
+
+    if (bestSuggestion) {
+      console.log('Trying best suggestion:', bestSuggestion);
+      result = await engineBridge.locateElement(
+        screenshotPath,
+        bestSuggestion,
+        step.region || 'full',
+        false, // suggestions are text, not icons
+        step.instruction || '',
+        step.quad || null
+      );
+      console.log('Suggestion locate result:', JSON.stringify(result));
+    }
+  }
+
+  // Clean up screenshot file
+  try {
+    fs.unlinkSync(screenshotPath);
+  } catch (e) {
+    // Ignore cleanup errors
+  }
+
   if (result.found && result.center) {
     tutorialState.mode = 'highlighting';
     // Adjust coordinates for menu bar offset (workArea vs full screen)
