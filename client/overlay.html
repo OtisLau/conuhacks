@@ -32,7 +32,7 @@
       right: 20px; /* Top right */
       left: auto; /* Remove left positioning */
       width: 350px; /* Smaller width */
-      height: 40px; /* Smaller height */
+      height: 40px; /* Default height */
       background: linear-gradient(to right, #2a2a2a, #252525); /* More subtle gradient */
       /* backdrop-filter removed */
       border-radius: 20px; /* Pill-shaped (half of height) */
@@ -89,8 +89,8 @@
 
     textarea {
       width: 100%;
-      height: 100%; /* Fill the container */
-      line-height: 40px; /* Match container height for vertical centering */
+      height: 40px; /* Default height */
+      line-height: 20px; /* Normal line height for multiline */
       background: transparent;
       border: none;
       color: white;
@@ -98,9 +98,11 @@
       resize: none;
       outline: none;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      padding: 0 15px 0 20px; /* Horizontal padding only */
+      padding: 10px 15px 10px 20px; /* Vertical padding for centering */
       text-align: left; /* Left align text */
       transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
+      overflow-y: hidden; /* Hide scrollbar, we'll expand instead */
+      box-sizing: border-box;
     }
 
     .control-panel.loading-ball textarea,
@@ -340,6 +342,70 @@
     const controlPanel = document.getElementById('controlPanel');
     const promptInput = document.getElementById('promptInput');
     const eventLog = document.getElementById('eventLog');
+
+    // Auto-resize control panel based on textarea content
+    const DEFAULT_HEIGHT = 40;
+    const MAX_HEIGHT = 200; // Maximum height to prevent excessive expansion
+    const LINE_HEIGHT = 20; // Line height from CSS
+    const PADDING_VERTICAL = 20; // 10px top + 10px bottom
+
+    function adjustControlPanelHeight() {
+      // Skip if in loading state
+      if (controlPanel.classList.contains('loading-ball') ||
+          controlPanel.classList.contains('loading-active')) {
+        return;
+      }
+
+      // If empty, use default height
+      if (!promptInput.value || promptInput.value.trim() === '') {
+        controlPanel.style.height = DEFAULT_HEIGHT + 'px';
+        promptInput.style.height = DEFAULT_HEIGHT + 'px';
+        controlPanel.style.borderRadius = '20px';
+        return;
+      }
+
+      // First check at current/default height if content is overflowing
+      const currentHeight = parseInt(promptInput.style.height) || DEFAULT_HEIGHT;
+
+      // Check if scrollHeight exceeds current height (content is cut off)
+      const isOverflowing = promptInput.scrollHeight > currentHeight;
+
+      if (isOverflowing) {
+        // Content needs more space, measure actual requirement
+        promptInput.style.height = 'auto';
+        const scrollHeight = promptInput.scrollHeight;
+        const requiredHeight = Math.min(scrollHeight, MAX_HEIGHT);
+
+        controlPanel.style.height = requiredHeight + 'px';
+        promptInput.style.height = requiredHeight + 'px';
+      } else {
+        // Content might fit in a smaller height, try default
+        promptInput.style.height = DEFAULT_HEIGHT + 'px';
+
+        // Check if it still fits
+        if (promptInput.scrollHeight <= DEFAULT_HEIGHT) {
+          // Fits in default, use it
+          controlPanel.style.height = DEFAULT_HEIGHT + 'px';
+        } else {
+          // Doesn't fit in default, measure actual requirement
+          promptInput.style.height = 'auto';
+          const scrollHeight = promptInput.scrollHeight;
+          const requiredHeight = Math.min(scrollHeight, MAX_HEIGHT);
+
+          controlPanel.style.height = requiredHeight + 'px';
+          promptInput.style.height = requiredHeight + 'px';
+        }
+      }
+
+      controlPanel.style.borderRadius = '20px';
+    }
+
+    // Set initial height explicitly
+    controlPanel.style.height = DEFAULT_HEIGHT + 'px';
+    promptInput.style.height = DEFAULT_HEIGHT + 'px';
+
+    // Adjust height on input
+    promptInput.addEventListener('input', adjustControlPanelHeight);
 
     // Prevent accidental quits on startup
     let quitButtonReady = false;
@@ -787,9 +853,15 @@
         loadingTimeout = null;
       }
       controlPanel.classList.remove('loading-ball', 'loading-active');
+
+      // Reset height to default
+      controlPanel.style.height = DEFAULT_HEIGHT + 'px';
       promptInput.value = '';
       promptInput.readOnly = false;
       promptInput.focus();
+
+      // Adjust height after a brief delay
+      setTimeout(adjustControlPanelHeight, 50);
     }
 
     // Submit on Enter key
@@ -832,31 +904,33 @@
 
     // Update UI based on tutorial state
     function updateUIForState(state) {
+      let placeholderText = '';
+
       switch (state.mode) {
         case 'idle':
           promptInput.disabled = false;
-          promptInput.placeholder = 'Type your command...';
+          placeholderText = 'Type your command...';
           break;
         case 'planning':
           promptInput.disabled = true;
-          promptInput.placeholder = 'Planning...';
+          placeholderText = 'Planning...';
           break;
         case 'locating':
           promptInput.disabled = true;
-          promptInput.placeholder = 'Finding element...';
+          placeholderText = 'Finding element...';
           break;
         case 'highlighting':
           promptInput.disabled = true;
           if (state.plan && state.plan.steps && state.plan.steps[state.currentStepIndex]) {
             const step = state.plan.steps[state.currentStepIndex];
-            promptInput.placeholder = `Step ${state.currentStepIndex + 1}: ${step.instruction}`;
+            placeholderText = `Step ${state.currentStepIndex + 1}: ${step.instruction}`;
           } else {
-            promptInput.placeholder = `Step ${state.currentStepIndex + 1}: Click the target`;
+            placeholderText = `Step ${state.currentStepIndex + 1}: Click the target`;
           }
           break;
         case 'complete':
           promptInput.disabled = false;
-          promptInput.placeholder = 'Done! Type next command...';
+          placeholderText = 'Done! Type next command...';
           tutorialMode = false;
           fixedSpotlightX = null;
           fixedSpotlightY = null;
@@ -864,12 +938,48 @@
           break;
         case 'error':
           promptInput.disabled = false;
-          promptInput.placeholder = 'Type your command...';
+          placeholderText = 'Type your command...';
           if (state.error) {
             logEvent('ERROR', { message: state.error });
           }
           break;
       }
+
+      promptInput.placeholder = placeholderText;
+
+      // Adjust height for long placeholder text
+      setTimeout(() => adjustHeightForPlaceholder(placeholderText), 50);
+    }
+
+    // Adjust height based on placeholder text length
+    function adjustHeightForPlaceholder(text) {
+      if (!text) {
+        controlPanel.style.height = DEFAULT_HEIGHT + 'px';
+        promptInput.style.height = DEFAULT_HEIGHT + 'px';
+        return;
+      }
+
+      // Create temporary element to measure text height
+      const temp = document.createElement('div');
+      temp.style.position = 'absolute';
+      temp.style.visibility = 'hidden';
+      temp.style.width = (350 - 35) + 'px'; // Control panel width minus padding
+      temp.style.fontSize = '16px';
+      temp.style.lineHeight = '20px';
+      temp.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif';
+      temp.style.whiteSpace = 'pre-wrap';
+      temp.style.wordWrap = 'break-word';
+      temp.textContent = text;
+      document.body.appendChild(temp);
+
+      const textHeight = temp.offsetHeight;
+      document.body.removeChild(temp);
+
+      // Calculate required height with padding
+      const requiredHeight = Math.min(Math.max(textHeight + 20, DEFAULT_HEIGHT), MAX_HEIGHT);
+
+      controlPanel.style.height = requiredHeight + 'px';
+      promptInput.style.height = requiredHeight + 'px';
     }
 
 
