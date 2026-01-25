@@ -49,18 +49,17 @@
     }
 
     .control-panel.loading-ball {
-      right: 20px; /* Collapse to the right side */
-      width: 40px;  /* Same height as input bar */
-      height: 40px; /* Same height as input bar */
+      width: 50px;  /* Slightly larger circle */
+      height: 50px;
       border-radius: 50%;
       animation: pulse-ball 0.6s ease-in-out 3; /* Pulse 3 times - faster rate */
     }
 
-    .control-panel.loading-text {
-      right: 20px; /* Back to original position */
-      width: 350px;
-      height: 40px;
-      border-radius: 20px;
+    .control-panel.loading-active {
+      width: 50px;  /* Keep as circle during active loading */
+      height: 50px;
+      border-radius: 50%;
+      /* No pulsing animation */
     }
 
     @keyframes pulse-ball {
@@ -72,6 +71,39 @@
         transform: scale(1.05); /* Reduced from 1.1 to 1.05 - smaller growth */
         box-shadow: 0 6px 20px 0 rgba(142, 142, 147, 0.4); /* Slightly reduced glow */
       }
+    }
+
+    /* Status bar that appears to the left of loading circle */
+    .status-bar {
+      position: absolute;
+      top: 20px; /* Same top position as circle */
+      right: 80px; /* Position to the left of the circle (50px circle + 10px gap + 20px original right margin) */
+      width: 200px;
+      height: 50px; /* Same height as circle */
+      background: linear-gradient(to right, #2a2a2a, #252525);
+      border-radius: 25px; /* Half of height for pill shape */
+      border: 0.5px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.3);
+      z-index: 2;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: translateX(20px);
+      transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1);
+    }
+
+    .status-bar.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .status-bar-text {
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+      font-weight: 400;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
     }
 
     textarea {
@@ -90,32 +122,28 @@
       transition: all 0.5s cubic-bezier(0.4, 0.0, 0.2, 1); /* Smoother easing */
     }
 
-    .control-panel.loading-ball textarea {
+    .control-panel.loading-ball textarea,
+    .control-panel.loading-active textarea {
       opacity: 0;
       font-size: 0;
       pointer-events: none; /* Disable interaction during loading */
     }
 
-    .control-panel.loading-text textarea {
-      opacity: 1;
-      text-align: left;
-      pointer-events: auto;
-    }
-
     /* Loading icon */
     .loading-icon {
       position: absolute;
-      width: 24px;
-      height: 24px;
+      width: 26px;
+      height: 26px;
       opacity: 0;
       transition: opacity 0.3s ease-in-out;
       pointer-events: none;
       filter: invert(1); /* Make the black SVG white */
     }
 
-    .control-panel.loading-ball .loading-icon {
+    .control-panel.loading-ball .loading-icon,
+    .control-panel.loading-active .loading-icon {
       opacity: 1;
-      animation: spin-icon 1.5s linear infinite;
+      animation: spin-icon 1s linear infinite;
     }
 
     @keyframes spin-icon {
@@ -124,6 +152,38 @@
       }
       to {
         transform: rotate(360deg);
+      }
+    }
+
+    /* Loading dots in status bar */
+    .loading-dots {
+      display: inline-flex;
+      gap: 3px;
+      margin-left: 4px;
+    }
+
+    .loading-dots span {
+      width: 3px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      animation: dot-blink 1.4s infinite;
+    }
+
+    .loading-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .loading-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes dot-blink {
+      0%, 60%, 100% {
+        opacity: 0.3;
+      }
+      30% {
+        opacity: 1;
       }
     }
 
@@ -297,11 +357,21 @@
 
   <!-- Control Panel -->
   <div class="control-panel" id="controlPanel">
-    <img src="assets/globe-localization-svgrepo-com.svg" alt="Loading" class="loading-icon" id="loadingIcon">
+    <img src="assets/loading-svgrepo-com (1).svg" alt="Loading" class="loading-icon" id="loadingIcon">
     <textarea
       id="promptInput"
       placeholder="Type your command..."
     ></textarea>
+  </div>
+
+  <!-- Status Bar (appears below loading circle) -->
+  <div class="status-bar" id="statusBar">
+    <span class="status-bar-text" id="statusText">thinking</span>
+    <div class="loading-dots">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
   </div>
 
   <!-- Instruction Box -->
@@ -647,34 +717,19 @@
     function animateLoadingCycle() {
       if (!isLoadingActive) return;
 
-      // Ball state - collapse to right and pulse 3 times
-      controlPanel.classList.remove('loading-text');
-      controlPanel.classList.add('loading-ball');
-      promptInput.value = '';
+      const statusBar = document.getElementById('statusBar');
+      const statusText = document.getElementById('statusText');
 
-      // After 1.8 seconds of ball pulsing (3 pulses at 0.6s each), expand and show text
+      // Update status text
+      statusText.textContent = loadingMessages[messageIndex];
+      messageIndex = (messageIndex + 1) % loadingMessages.length;
+
+      // After 2 seconds, update to next status message
       loadingTimeout = setTimeout(() => {
         if (!isLoadingActive) return;
-
-        controlPanel.classList.remove('loading-ball');
-        controlPanel.classList.add('loading-text');
-        promptInput.value = loadingMessages[messageIndex];
-        messageIndex = (messageIndex + 1) % loadingMessages.length;
-
-        // After 1.5 seconds of text, go back to ball
-        loadingTimeout = setTimeout(() => {
-          if (!isLoadingActive) return;
-
-          loadingCycleCount++;
-
-          // Continue cycling (remove auto-stop for real LLM integration)
-          // if (loadingCycleCount >= 5) {
-          //   stopLoadingAnimation();
-          // } else {
-            animateLoadingCycle();
-          // }
-        }, 1500);
-      }, 1800);
+        loadingCycleCount++;
+        animateLoadingCycle();
+      }, 2000);
     }
 
     function startLoadingAnimation() {
@@ -682,6 +737,14 @@
       messageIndex = 0;
       isLoadingActive = true;
       promptInput.value = '';
+      promptInput.readOnly = true;
+
+      const statusBar = document.getElementById('statusBar');
+
+      // Show circle and status bar immediately
+      controlPanel.classList.add('loading-active');
+      statusBar.classList.add('visible');
+
       animateLoadingCycle();
     }
 
@@ -691,7 +754,9 @@
         clearTimeout(loadingTimeout);
         loadingTimeout = null;
       }
-      controlPanel.classList.remove('loading-ball', 'loading-text');
+      const statusBar = document.getElementById('statusBar');
+      controlPanel.classList.remove('loading-ball', 'loading-active');
+      statusBar.classList.remove('visible');
       promptInput.value = '';
       promptInput.readOnly = false;
       promptInput.focus();
@@ -706,8 +771,7 @@
         console.log('Starting tutorial:', prompt);
         logEvent('USER_ACTION', { message: 'Start tutorial: ' + prompt });
 
-        // Make input read-only and start loading animation
-        promptInput.readOnly = true;
+        // Start loading animation
         startLoadingAnimation();
 
         // TODO: Replace this with actual LLM call
