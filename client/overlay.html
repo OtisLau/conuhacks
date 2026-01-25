@@ -373,6 +373,7 @@
 
     // Tutorial mode variables
     let tutorialMode = false;
+    let tutorialState = null; // Track full tutorial state
     let fixedSpotlightX = null;
     let fixedSpotlightY = null;
     let spotlightRadius = defaultCircleRadius; // Dynamic radius based on bbox
@@ -428,6 +429,9 @@
 
       // Always draw border
       drawBorder();
+
+      // Draw spotlight circle if in tutorial mode
+      drawSpotlightCircle();
 
       if (!currentHighlight) {
         animationId = requestAnimationFrame(animate);
@@ -870,17 +874,55 @@
 
 
 
-    // Click capture toggle - this disables click-through so we can log clicks
-    captureToggle.addEventListener('change', () => {
-      clickCaptureMode = captureToggle.checked;
-      console.log('Click capture mode:', clickCaptureMode);
-      logEvent('SYSTEM', { message: `Click capture mode: ${clickCaptureMode ? 'ON' : 'OFF'}` });
+    // Click capture toggle - DISABLED (captureToggle element doesn't exist)
+    // captureToggle.addEventListener('change', () => {
+    //   clickCaptureMode = captureToggle.checked;
+    //   console.log('Click capture mode:', clickCaptureMode);
+    //   logEvent('SYSTEM', { message: `Click capture mode: ${clickCaptureMode ? 'ON' : 'OFF'}` });
+    //
+    //   // When enabled, disable click-through globally to capture all clicks on overlay
+    //   if (window.electronAPI) {
+    //     window.electronAPI.send('set-click-through', !clickCaptureMode);
+    //   }
+    // });
 
-      // When enabled, disable click-through globally to capture all clicks on overlay
-      if (window.electronAPI) {
-        window.electronAPI.send('set-click-through', !clickCaptureMode);
-      }
-    });
+    // Listen for tutorial state changes
+    if (window.electronAPI) {
+      window.electronAPI.onTutorialStateChange((state) => {
+        console.log('Tutorial state changed:', state);
+        tutorialState = state; // Store the state
+        updateUIForState(state);
+      });
+
+      // Listen for spotlight position updates to draw circles
+      window.electronAPI.onSetSpotlightPosition((coords) => {
+        console.log('Spotlight position received:', coords);
+        if (coords && coords.x !== undefined && coords.y !== undefined) {
+          // Enable tutorial mode and set circle position
+          tutorialMode = true;
+          fixedSpotlightX = coords.x;
+          fixedSpotlightY = coords.y;
+
+          // Calculate radius from bbox if available
+          if (coords.bbox) {
+            const [x1, y1, x2, y2] = coords.bbox;
+            const w = x2 - x1;
+            const h = y2 - y1;
+            // Use the larger dimension to ensure the circle encompasses the element
+            spotlightRadius = Math.max(w, h) / 2 + 10; // Add padding
+          } else {
+            spotlightRadius = defaultCircleRadius;
+          }
+
+          console.log('Set spotlight circle at:', fixedSpotlightX, fixedSpotlightY, 'radius:', spotlightRadius);
+        } else {
+          // Clear spotlight
+          tutorialMode = false;
+          fixedSpotlightX = null;
+          fixedSpotlightY = null;
+        }
+      });
+    }
 
     // Start animation loop to show border
     animate();
