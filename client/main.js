@@ -3,6 +3,7 @@ const path = require('path');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 
 let overlayWindow;
+let spotlightWindow;
 let mouseTrackingInterval;
 let lastMousePos = { x: 0, y: 0 };
 
@@ -61,6 +62,43 @@ function createOverlayWindow() {
   }
 }
 
+function createSpotlightWindow() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.bounds;
+
+  spotlightWindow = new BrowserWindow({
+    x: 0,
+    y: 0,
+    width,
+    height,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    visibleOnAllWorkspaces: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'mouse_events', 'preload.js')
+    },
+  });
+
+  // Start with click-through enabled
+  spotlightWindow.setIgnoreMouseEvents(true, { forward: true });
+
+  spotlightWindow.loadFile('spotlight/index.html');
+
+  if (process.argv.includes('--dev')) {
+    spotlightWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
 // Set up IPC handlers ONCE
 ipcMain.on('set-click-through', (event, enabled) => {
   console.log('Click-through mode:', enabled);
@@ -82,8 +120,17 @@ ipcMain.on('forward-click', (event, data) => {
   console.log(`Click at (${data.x}, ${data.y}) - button: ${data.button}`);
 });
 
-ipcMain.on('quit-app', () => {
-  console.log('Quit app IPC received!');
+ipcMain.on('quit-app', (event) => {
+  console.log('Quit app IPC received from a window!');
+  if (event && event.sender) {
+    const senderWindow = BrowserWindow.fromWebContents(event.sender);
+    if (senderWindow) {
+        console.log(`Quit signal from window with ID: ${senderWindow.id}`);
+        // To get more info, we can check the window's title or URL
+        console.log(`Window Title: ${senderWindow.getTitle()}`);
+        console.log(`Window URL: ${senderWindow.webContents.getURL()}`);
+    }
+  }
   forceQuit();
 });
 

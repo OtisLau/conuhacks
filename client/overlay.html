@@ -233,6 +233,11 @@
     let animationId = null;
     const maxLogEntries = 50;
 
+    // Spotlight circle state
+    let mouseX = canvas.width / 2;
+    let mouseY = canvas.height / 2;
+    const circleRadius = 100;
+
     // Draw border to show overlay bounds
     function drawBorder() {
       ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
@@ -240,6 +245,15 @@
       ctx.setLineDash([10, 5]);
       ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
       ctx.setLineDash([]);
+    }
+
+    // Draw spotlight circle
+    function drawSpotlightCircle() {
+      ctx.beginPath();
+      ctx.arc(mouseX, mouseY, circleRadius, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
 
     function drawHighlight(bbox, instruction) {
@@ -254,6 +268,9 @@
 
       // Always draw border
       drawBorder();
+
+      // Always draw spotlight circle
+      drawSpotlightCircle();
 
       if (!currentHighlight) {
         animationId = requestAnimationFrame(animate);
@@ -417,6 +434,10 @@
       // Global mouse move
       if (window.electronAPI.onGlobalMouseMove) {
         window.electronAPI.onGlobalMouseMove((event) => {
+          // Update spotlight circle position
+          mouseX = event.position.x;
+          mouseY = event.position.y;
+
           if (!window.lastGlobalMoveLog || Date.now() - window.lastGlobalMoveLog > 100) {
             logEvent('mouse-move [GLOBAL]', { x: event.position.x, y: event.position.y });
             window.lastGlobalMoveLog = Date.now();
