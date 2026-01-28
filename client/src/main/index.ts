@@ -6,19 +6,26 @@
 import { app, BrowserWindow, screen, ipcMain, globalShortcut } from 'electron';
 import path from 'path';
 import { uIOhook } from 'uiohook-napi';
-import engineBridge from './services/EngineBridge';
+import engineBridge, { checkApiHealth, checkApiReadiness } from './services/EngineBridge';
 import type {
   TutorialState,
   TutorialMode,
   SpotlightCoords,
 } from '../shared/types/tutorial.types';
 import type { MousePosition } from '../shared/types/mouse.types';
+import type { BackendStatus, BackendReadiness } from '../shared/types/ipc.types';
 import { IPC_CHANNELS } from '../shared/constants/channels';
 
 let overlayWindow: BrowserWindow | null = null;
 let spotlightWindow: BrowserWindow | null = null;
 let mouseTrackingInterval: NodeJS.Timeout | null = null;
+let healthCheckInterval: NodeJS.Timeout | null = null;
 let lastMousePos: MousePosition = { x: 0, y: 0 };
+
+// Backend connection state
+let backendStatus: BackendStatus = { connected: false };
+let backendReadiness: BackendReadiness = { ready: false, tesseract: false, gemini: { available: false } };
+const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
 
 // Tutorial state machine
 let tutorialState: TutorialState = {
@@ -38,6 +45,12 @@ function forceQuit(): void {
   // Stop mouse tracking
   stopGlobalMouseTracking();
 
+  // Stop health check interval
+  if (healthCheckInterval) {
+    clearInterval(healthCheckInterval);
+    healthCheckInterval = null;
+  }
+
   // Close all windows
   BrowserWindow.getAllWindows().forEach((win) => {
     win.destroy();
@@ -48,6 +61,72 @@ function forceQuit(): void {
 
   // Force exit immediately
   process.exit(0);
+}
+
+/**
+ * Broadcast backend status to all renderer windows
+ */
+function broadcastBackendStatus(status: BackendStatus): void {
+  backendStatus = status;
+  overlayWindow?.webContents.send(IPC_CHANNELS.BACKEND_STATUS, status);
+  spotlightWindow?.webContents.send(IPC_CHANNELS.BACKEND_STATUS, status);
+}
+
+/**
+ * Broadcast backend readiness to all renderer windows
+ */
+function broadcastBackendReadiness(readiness: BackendReadiness): void {
+  backendReadiness = readiness;
+  overlayWindow?.webContents.send(IPC_CHANNELS.BACKEND_READINESS, readiness);
+  spotlightWindow?.webContents.send(IPC_CHANNELS.BACKEND_READINESS, readiness);
+}
+
+/**
+ * Check backend health and update status
+ */
+async function checkBackendConnection(): Promise<BackendStatus> {
+  try {
+    const healthy = await checkApiHealth();
+    if (!healthy) {
+      return { connected: false, error: 'Backend health check failed' };
+    }
+
+    // Also check readiness
+    try {
+      const readiness = await checkApiReadiness();
+      broadcastBackendReadiness(readiness);
+
+      if (!readiness.ready) {
+        const missing: string[] = [];
+        if (!readiness.tesseract) missing.push('Tesseract OCR');
+        if (!readiness.gemini.available) missing.push('Gemini API');
+        return {
+          connected: true,
+          error: missing.length > 0 ? `Services unavailable: ${missing.join(', ')}` : undefined
+        };
+      }
+    } catch {
+      // Readiness check failed but health is ok
+    }
+
+    return { connected: true };
+  } catch (err) {
+    return { connected: false, error: 'Cannot reach backend at localhost:8000' };
+  }
+}
+
+/**
+ * Start periodic health checks
+ */
+function startHealthCheckInterval(): void {
+  // Initial check
+  checkBackendConnection().then(broadcastBackendStatus);
+
+  // Periodic checks
+  healthCheckInterval = setInterval(async () => {
+    const status = await checkBackendConnection();
+    broadcastBackendStatus(status);
+  }, HEALTH_CHECK_INTERVAL);
 }
 
 function createOverlayWindow(): void {
@@ -143,6 +222,13 @@ function createSpotlightWindow(): void {
 }
 
 function setupIpcHandlers(): void {
+  // Backend health check handler
+  ipcMain.handle(IPC_CHANNELS.CHECK_BACKEND_HEALTH, async () => {
+    const status = await checkBackendConnection();
+    broadcastBackendStatus(status);
+    return status;
+  });
+
   ipcMain.on(IPC_CHANNELS.SET_CLICK_THROUGH, (_event, enabled: boolean) => {
     if (overlayWindow) {
       overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
@@ -480,6 +566,9 @@ app.whenReady().then(() => {
 
   // Start global mouse tracking
   startGlobalMouseTracking();
+
+  // Start backend health check monitoring
+  startHealthCheckInterval();
 
   // Register global keyboard shortcut for quitting
   globalShortcut.register('CommandOrControl+Q', () => {

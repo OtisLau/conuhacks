@@ -11,6 +11,17 @@ export interface StartTutorialResponse {
   error?: string;
 }
 
+export interface BackendStatus {
+  connected: boolean;
+  error?: string;
+}
+
+export interface BackendReadiness {
+  ready: boolean;
+  tesseract: boolean;
+  gemini: { available: boolean; error?: string };
+}
+
 /**
  * ElectronAPI exposed to renderer process via contextBridge
  */
@@ -30,6 +41,11 @@ export interface ElectronAPI {
   onGlobalMouseUp: (callback: (event: MouseUpEvent) => void) => () => void;
   onGlobalClick: (callback: (event: MouseClickEvent) => void) => () => void;
   onGlobalScroll: (callback: (event: MouseScrollEvent) => void) => () => void;
+
+  // Backend status
+  checkBackendHealth: () => Promise<BackendStatus>;
+  onBackendStatus: (callback: (status: BackendStatus) => void) => () => void;
+  onBackendReadiness: (callback: (readiness: BackendReadiness) => void) => () => void;
 
   // Window control
   send: (channel: string, data: unknown) => void;

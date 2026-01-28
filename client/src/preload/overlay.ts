@@ -19,6 +19,10 @@ const IPC_CHANNELS = {
   GLOBAL_CLICK: 'global-click',
   GLOBAL_SCROLL: 'global-scroll',
   SET_CLICK_THROUGH: 'set-click-through',
+  // Backend status channels
+  BACKEND_STATUS: 'backend:status',
+  BACKEND_READINESS: 'backend:readiness',
+  CHECK_BACKEND_HEALTH: 'backend:check-health',
 } as const;
 
 const electronAPI: ElectronAPI = {
@@ -89,6 +93,26 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on(IPC_CHANNELS.GLOBAL_SCROLL, listener);
     return () => {
       ipcRenderer.removeListener(IPC_CHANNELS.GLOBAL_SCROLL, listener);
+    };
+  },
+
+  // Backend status
+  checkBackendHealth: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.CHECK_BACKEND_HEALTH),
+
+  onBackendStatus: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: any) => callback(status);
+    ipcRenderer.on(IPC_CHANNELS.BACKEND_STATUS, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.BACKEND_STATUS, listener);
+    };
+  },
+
+  onBackendReadiness: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, readiness: any) => callback(readiness);
+    ipcRenderer.on(IPC_CHANNELS.BACKEND_READINESS, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC_CHANNELS.BACKEND_READINESS, listener);
     };
   },
 
