@@ -252,7 +252,18 @@ function setupIpcHandlers(): void {
   // Tutorial: Start tutorial with a task
   ipcMain.handle(IPC_CHANNELS.START_TUTORIAL, async (_event, task: string) => {
     try {
+      // Validate task input
+      if (!task || task.trim().length === 0) {
+        throw new Error('Please enter a task description');
+      }
+
       console.log('Starting tutorial for task:', task);
+
+      // Check backend connection first
+      if (!backendStatus.connected) {
+        throw new Error('Backend is not connected. Please start the backend server.');
+      }
+
       tutorialState.mode = 'planning' as TutorialMode;
       tutorialState.error = null;
       overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
@@ -260,11 +271,17 @@ function setupIpcHandlers(): void {
       // Take screenshot
       console.log('Taking screenshot...');
       const screenshotPath = await engineBridge.takeScreenshot();
+      console.log('Screenshot captured:', screenshotPath);
 
       // Generate plan
       console.log('Generating plan...');
       const plan = await engineBridge.generatePlan(screenshotPath, task);
-      console.log('Plan generated:', JSON.stringify(plan, null, 2));
+      console.log(`Plan generated: ${plan.steps.length} steps`);
+
+      if (plan.steps.length === 0) {
+        throw new Error('Could not generate a plan for this task. Try rephrasing your request.');
+      }
+
       tutorialState.plan = plan;
       tutorialState.currentStepIndex = 0;
 
@@ -275,9 +292,18 @@ function setupIpcHandlers(): void {
     } catch (error) {
       console.error('Tutorial error:', error);
       tutorialState.mode = 'error' as TutorialMode;
-      tutorialState.error = error instanceof Error ? error.message : String(error);
+
+      // Provide user-friendly error messages
+      let errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('Cannot connect to backend')) {
+        errorMessage = 'Cannot connect to backend server. Is it running?';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = 'Request timed out. The AI service may be slow.';
+      }
+
+      tutorialState.error = errorMessage;
       overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
-      return { success: false, error: tutorialState.error };
+      return { success: false, error: errorMessage };
     }
   });
 

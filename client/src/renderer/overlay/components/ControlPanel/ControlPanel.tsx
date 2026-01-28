@@ -21,6 +21,7 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
   const tutorialMode = useTutorialStore((state) => state.mode);
   const currentStep = useTutorialStore((state) => state.currentStepIndex);
   const plan = useTutorialStore((state) => state.plan);
+  const tutorialError = useTutorialStore((state) => state.error);
 
   const isLoading = useUIStore((state) => state.isLoading);
   const loadingMessage = useUIStore((state) => state.loadingMessage);
@@ -169,30 +170,45 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
     ? `${height / 2}px`
     : `${RECT_BORDER_RADIUS}px`;
 
-  const isDisabled = !backendConnected || (tutorialMode !== 'idle' && tutorialMode !== 'complete');
+  const isDisabled = !backendConnected || (tutorialMode !== 'idle' && tutorialMode !== 'complete' && tutorialMode !== 'error');
+
+  // Show error state
+  const showError = tutorialMode === 'error' && tutorialError;
 
   return (
-    <div
-      ref={panelRef}
-      className={`control-panel ${isLoading ? 'loading-text' : ''}`}
-      style={{ height: `${height}px`, borderRadius }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {isLoading && (
-        <div className="loading-text-display">{loadingMessage}...</div>
+    <>
+      {showError && (
+        <div
+          className="error-banner"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <span className="error-icon">!</span>
+          <span className="error-message">{tutorialError}</span>
+        </div>
       )}
-      <textarea
-        ref={textareaRef}
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholderText}
-        disabled={isDisabled}
-        style={{ height: `${height}px` }}
-        autoFocus
-      />
-    </div>
+      <div
+        ref={panelRef}
+        className={`control-panel ${isLoading ? 'loading-text' : ''} ${showError ? 'has-error' : ''}`}
+        style={{ height: `${height}px`, borderRadius }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {isLoading && (
+          <div className="loading-text-display">{loadingMessage}...</div>
+        )}
+        <textarea
+          ref={textareaRef}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholderText}
+          disabled={isDisabled}
+          style={{ height: `${height}px` }}
+          autoFocus
+        />
+      </div>
+    </>
   );
 };
 

@@ -130,3 +130,65 @@ textarea::placeholder {
   font-weight: 300;
   letter-spacing: 0.3px;
 }
+
+/* Error banner styles */
+.error-banner {
+  position: absolute;
+  top: 90px;
+  right: 20px;
+  width: 420px;
+  padding: 12px 16px;
+  background: linear-gradient(
+    145deg,
+    rgba(220, 38, 38, 0.85) 0%,
+    rgba(185, 28, 28, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4);
+  z-index: 3;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: error-slide-in 0.3s ease-out;
+}
+
+@keyframes error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.error-message {
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+.control-panel.has-error {
+  border-color: rgba(220, 38, 38, 0.5);
+}
