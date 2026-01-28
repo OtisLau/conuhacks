@@ -29,13 +29,19 @@ export function useCanvas(
     canvas.style.width = `${window.screen.width}px`;
     canvas.style.height = `${window.screen.height}px`;
 
+    // Scale context so rendering code can use CSS pixel coordinates
+    ctx.scale(dpr, dpr);
+
     console.log('Canvas initialized:', canvas.width, 'x', canvas.height, 'DPR:', dpr);
 
     let animationId: number;
 
     const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, window.screen.width, window.screen.height);
       render(ctx, canvas);
+      ctx.restore();
       animationId = requestAnimationFrame(animate);
     };
 

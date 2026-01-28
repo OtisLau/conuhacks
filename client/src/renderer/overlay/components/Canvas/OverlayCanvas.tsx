@@ -13,11 +13,15 @@ const OverlayCanvas: React.FC = () => {
   const spotlight = useSpotlight();
 
   const render = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+    // Use CSS dimensions since canvas context is DPR-scaled
+    const cssWidth = window.screen.width;
+    const cssHeight = window.screen.height;
+
     // Draw border
     ctx.strokeStyle = 'rgba(142, 142, 147, 0.3)';
     ctx.lineWidth = 2;
     ctx.setLineDash([10, 5]);
-    ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+    ctx.strokeRect(1, 1, cssWidth - 2, cssHeight - 2);
     ctx.setLineDash([]);
 
     // Draw spotlight if visible
@@ -44,10 +48,10 @@ function drawSpotlight(
   const displayRadius = radius * 1.15;
   const featherSize = displayRadius * 0.3;
 
-  // Draw dimmed overlay
+  // Draw dimmed overlay (use CSS dimensions since context is DPR-scaled)
   ctx.save();
   ctx.fillStyle = `rgba(0, 0, 0, ${0.65 * opacity})`;
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.fillRect(0, 0, window.screen.width, window.screen.height);
 
   // Cut out spotlight with soft gradient
   ctx.globalCompositeOperation = 'destination-out';

@@ -54,10 +54,8 @@ export function useSpotlight() {
     console.log('=== SPOTLIGHT COORDS FROM STORE ===', targetCoords);
 
     if (targetCoords) {
-      const dpr = window.devicePixelRatio || 1;
-
-      // Calculate radius from bounding box if available
-      let targetRadius = DEFAULT_RADIUS * dpr;
+      // Canvas context is now DPR-scaled, so work in CSS pixel coordinates
+      let targetRadius = DEFAULT_RADIUS;
       if (targetCoords.bbox && Array.isArray(targetCoords.bbox) && targetCoords.bbox.length === 4) {
         const [x1, y1, x2, y2] = targetCoords.bbox;
         const bboxWidth = Math.abs(x2 - x1);
@@ -68,8 +66,8 @@ export function useSpotlight() {
       }
 
       // Calculate control panel center (start position for fly-out animation)
-      const controlPanelCenterX = (window.innerWidth - 20 - 210) * dpr;
-      const controlPanelCenterY = (20 + 30) * dpr;
+      const controlPanelCenterX = window.innerWidth - 20 - 210;
+      const controlPanelCenterY = 20 + 30;
 
       // Start fly-out animation
       setAnimation({

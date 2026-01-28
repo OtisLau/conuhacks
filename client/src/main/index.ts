@@ -91,23 +91,10 @@ function createOverlayWindow(): void {
   // In development with electron-vite, use the dev server
   // In production, load from built files
   if (process.env.VITE_DEV_SERVER_URL) {
-    // electron-vite serves multi-entry apps at: BASE_URL/entry-name.html
-    const overlayUrl = process.env.VITE_DEV_SERVER_URL + 'src/renderer/overlay/index.html';
-    console.log('Loading overlay from:', overlayUrl);
-    overlayWindow.loadURL(overlayUrl);
+    overlayWindow.loadURL(process.env.VITE_DEV_SERVER_URL + 'src/renderer/overlay/index.html');
   } else {
-    // Built files will be in out/renderer/src/renderer/overlay/
     overlayWindow.loadFile(path.join(__dirname, '..', 'renderer', 'src', 'renderer', 'overlay', 'index.html'));
   }
-
-  // Log when page loads
-  overlayWindow.webContents.on('did-finish-load', () => {
-    console.log('Overlay window loaded successfully');
-  });
-
-  overlayWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-    console.error('Overlay window failed to load:', errorCode, errorDescription);
-  });
 
   if (process.argv.includes('--dev')) {
     overlayWindow.webContents.openDevTools({ mode: 'detach' });
@@ -379,8 +366,14 @@ async function executeCurrentStep(retryCount: number = 0): Promise<void> {
 function startGlobalMouseTracking(): void {
   try {
     uIOhook.on('mousemove', (e) => {
+      // Mouse coordinates from uIOhook are in screen coordinates
+      // Overlay window is positioned at workArea (excludes menu bar)
+      // Need to adjust coordinates to be relative to overlay window
       const event = {
-        position: { x: e.x, y: e.y },
+        position: {
+          x: e.x - global.menuBarOffset.x,
+          y: e.y - global.menuBarOffset.y
+        },
         timestamp: Date.now(),
       };
 
@@ -396,7 +389,10 @@ function startGlobalMouseTracking(): void {
     uIOhook.on('mousedown', (e) => {
       if (overlayWindow && overlayWindow.webContents) {
         overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_DOWN, {
-          position: { x: e.x, y: e.y },
+          position: {
+            x: e.x - global.menuBarOffset.x,
+            y: e.y - global.menuBarOffset.y
+          },
           button: e.button,
           timestamp: Date.now(),
         });
@@ -406,7 +402,10 @@ function startGlobalMouseTracking(): void {
     uIOhook.on('mouseup', (e) => {
       if (overlayWindow && overlayWindow.webContents) {
         overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_UP, {
-          position: { x: e.x, y: e.y },
+          position: {
+            x: e.x - global.menuBarOffset.x,
+            y: e.y - global.menuBarOffset.y
+          },
           button: e.button,
           timestamp: Date.now(),
         });
@@ -416,7 +415,10 @@ function startGlobalMouseTracking(): void {
     uIOhook.on('click', (e) => {
       if (overlayWindow && overlayWindow.webContents) {
         overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_CLICK, {
-          position: { x: e.x, y: e.y },
+          position: {
+            x: e.x - global.menuBarOffset.x,
+            y: e.y - global.menuBarOffset.y
+          },
           button: e.button,
           clicks: e.clicks,
           timestamp: Date.now(),
@@ -427,7 +429,10 @@ function startGlobalMouseTracking(): void {
     uIOhook.on('wheel', (e) => {
       if (overlayWindow && overlayWindow.webContents) {
         overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_SCROLL, {
-          position: { x: e.x, y: e.y },
+          position: {
+            x: e.x - global.menuBarOffset.x,
+            y: e.y - global.menuBarOffset.y
+          },
           rotation: e.rotation,
           direction: e.direction,
           timestamp: Date.now(),
