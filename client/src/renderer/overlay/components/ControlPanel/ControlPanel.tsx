@@ -7,6 +7,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTutorialStore } from '../../store/tutorialStore';
 import { useUIStore } from '../../store/uiStore';
 import { useMouseStore } from '../../store/mouseStore';
+import { useBackendStore } from '../../store/backendStore';
 import { useLoadingMessages } from '../../hooks/useLoadingMessages';
 import './ControlPanel.css';
 
@@ -31,6 +32,8 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
 
   const setTutorialMode = useMouseStore((state) => state.setTutorialMode);
 
+  const backendConnected = useBackendStore((state) => state.status.connected);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -42,10 +45,17 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
   // Cycle loading messages when in planning mode
   useLoadingMessages(tutorialMode === 'planning');
 
-  // Update placeholder based on tutorial state
+  // Update placeholder based on tutorial state and backend connection
   useEffect(() => {
     let newPlaceholder = '';
     let disabled = false;
+
+    // Check backend connection first
+    if (!backendConnected) {
+      setPlaceholderText('Waiting for backend connection...');
+      setLoading(false);
+      return;
+    }
 
     switch (tutorialMode) {
       case 'idle':
@@ -87,7 +97,7 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
     }
 
     setPlaceholderText(newPlaceholder);
-  }, [tutorialMode, currentStep, plan, setLoading, setPlaceholderText, setTutorialMode]);
+  }, [tutorialMode, currentStep, plan, setLoading, setPlaceholderText, setTutorialMode, backendConnected]);
 
   // Auto-resize control panel based on textarea content
   const adjustHeight = () => {
@@ -159,7 +169,7 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
     ? `${height / 2}px`
     : `${RECT_BORDER_RADIUS}px`;
 
-  const isDisabled = tutorialMode !== 'idle' && tutorialMode !== 'complete';
+  const isDisabled = !backendConnected || (tutorialMode !== 'idle' && tutorialMode !== 'complete');
 
   return (
     <div
