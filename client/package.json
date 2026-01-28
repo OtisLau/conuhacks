@@ -4,6 +4,10 @@
   "description": "AI Screen Tutorial Guide",
   "main": "main.js",
   "scripts": {
+    "build:ts": "tsc -p tsconfig.main.json",
+    "dev:ts": "npm run build:ts && unset ELECTRON_RUN_AS_NODE && electron dist/main/index.js --dev",
+    "start:ts": "npm run build:ts && unset ELECTRON_RUN_AS_NODE && electron dist/main/index.js",
+    "typecheck": "tsc --noEmit",
     "start": "unset ELECTRON_RUN_AS_NODE && electron .",
     "dev": "unset ELECTRON_RUN_AS_NODE && electron . --dev",
     "kill": "pkill -f 'Electron.*conu/client'"
@@ -17,10 +21,22 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.3.3"
+    "@types/electron": "^1.4.38",
+    "@types/node": "^25.0.10",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "electron": "^28.3.3",
+    "electron-vite": "^5.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "robotjs": "^0.6.0",
-    "uiohook-napi": "^1.5.4"
+    "uiohook-napi": "^1.5.4",
+    "zustand": "^5.0.10"
   }
 }

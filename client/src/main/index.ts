@@ -1,0 +1,466 @@
+/**
+ * Main process entry point
+ * TypeScript version of main.js
+ */
+
+import { app, BrowserWindow, screen, ipcMain, globalShortcut } from 'electron';
+import path from 'path';
+import { uIOhook } from 'uiohook-napi';
+import engineBridge from './services/EngineBridge';
+import type {
+  TutorialState,
+  TutorialMode,
+  SpotlightCoords,
+} from '../shared/types/tutorial.types';
+import type { MousePosition } from '../shared/types/mouse.types';
+import { IPC_CHANNELS } from '../shared/constants/channels';
+
+let overlayWindow: BrowserWindow | null = null;
+// let spotlightWindow: BrowserWindow | null = null; // Commented out for Phase 1
+let mouseTrackingInterval: NodeJS.Timeout | null = null;
+let lastMousePos: MousePosition = { x: 0, y: 0 };
+
+// Tutorial state machine
+let tutorialState: TutorialState = {
+  mode: 'idle' as TutorialMode,
+  plan: null,
+  currentStepIndex: 0,
+  targetCoords: null,
+  error: null,
+};
+
+// Global menu bar offset
+declare global {
+  var menuBarOffset: { x: number; y: number };
+}
+
+function forceQuit(): void {
+  // Stop mouse tracking
+  stopGlobalMouseTracking();
+
+  // Close all windows
+  BrowserWindow.getAllWindows().forEach((win) => {
+    win.destroy();
+  });
+
+  // Unregister shortcuts
+  globalShortcut.unregisterAll();
+
+  // Force exit immediately
+  process.exit(0);
+}
+
+function createOverlayWindow(): void {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const workArea = primaryDisplay.workArea;
+  const bounds = primaryDisplay.bounds;
+
+  // Store the offset for coordinate adjustment
+  global.menuBarOffset = {
+    x: workArea.x - bounds.x,
+    y: workArea.y - bounds.y,
+  };
+  console.log('Menu bar offset:', global.menuBarOffset);
+
+  overlayWindow = new BrowserWindow({
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, '..', '..', 'mouse_events', 'preload.js'),
+    },
+  });
+
+  // Start with click-through enabled
+  overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+
+  // In development, __dirname is dist/main/, so go up to client/
+  overlayWindow.loadFile(path.join(__dirname, '..', '..', 'overlay.html'));
+
+  if (process.argv.includes('--dev')) {
+    overlayWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
+// function createSpotlightWindow(): void {
+//   const primaryDisplay = screen.getPrimaryDisplay();
+//   const { x, y, width, height } = primaryDisplay.bounds;
+
+//   spotlightWindow = new BrowserWindow({
+//     x,
+//     y,
+//     width,
+//     height,
+//     transparent: true,
+//     frame: false,
+//     alwaysOnTop: true,
+//     skipTaskbar: true,
+//     hasShadow: false,
+//     resizable: false,
+//     movable: false,
+//     minimizable: false,
+//     maximizable: false,
+//     closable: false,
+//     webPreferences: {
+//       nodeIntegration: false,
+//       contextIsolation: true,
+//       preload: path.join(__dirname, '..', '..', 'mouse_events', 'preload.js'),
+//     },
+//   });
+
+//   // Start with click-through enabled
+//   spotlightWindow.setIgnoreMouseEvents(true, { forward: true });
+
+//   spotlightWindow.loadFile(path.join(__dirname, '..', '..', '..', 'spotlight', 'index.html'));
+
+//   if (process.argv.includes('--dev')) {
+//     spotlightWindow.webContents.openDevTools({ mode: 'detach' });
+//   }
+// }
+
+function setupIpcHandlers(): void {
+  ipcMain.on(IPC_CHANNELS.SET_CLICK_THROUGH, (_event, enabled: boolean) => {
+    if (overlayWindow) {
+      overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
+    }
+  });
+
+  ipcMain.on(IPC_CHANNELS.SET_GLOBAL_CLICK_THROUGH, (_event, enabled: boolean) => {
+    if (overlayWindow) {
+      overlayWindow.setIgnoreMouseEvents(enabled, { forward: true });
+    }
+  });
+
+  ipcMain.on(IPC_CHANNELS.FORWARD_CLICK, (_event, _data: unknown) => {
+    // Clicks automatically pass through when click-through is enabled
+  });
+
+  ipcMain.on(IPC_CHANNELS.QUIT_APP, (_event) => {
+    forceQuit();
+  });
+
+  // Tutorial: Start tutorial with a task
+  ipcMain.handle(IPC_CHANNELS.START_TUTORIAL, async (_event, task: string) => {
+    try {
+      console.log('Starting tutorial for task:', task);
+      tutorialState.mode = 'planning' as TutorialMode;
+      tutorialState.error = null;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+
+      // Take screenshot
+      console.log('Taking screenshot...');
+      const screenshotPath = await engineBridge.takeScreenshot();
+
+      // Generate plan
+      console.log('Generating plan...');
+      const plan = await engineBridge.generatePlan(screenshotPath, task);
+      console.log('Plan generated:', JSON.stringify(plan, null, 2));
+      tutorialState.plan = plan;
+      tutorialState.currentStepIndex = 0;
+
+      // Execute first step
+      await executeCurrentStep();
+
+      return { success: true, plan };
+    } catch (error) {
+      console.error('Tutorial error:', error);
+      tutorialState.mode = 'error' as TutorialMode;
+      tutorialState.error = error instanceof Error ? error.message : String(error);
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+      return { success: false, error: tutorialState.error };
+    }
+  });
+
+  // Tutorial: User clicked the target
+  ipcMain.on(IPC_CHANNELS.TARGET_CLICKED, async () => {
+    if (tutorialState.mode === 'highlighting') {
+      tutorialState.currentStepIndex++;
+
+      // Clear the spotlight while waiting for next step
+      tutorialState.targetCoords = null;
+      overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+
+      // Wait for UI to settle after click (2.5s for page transitions)
+      setTimeout(async () => {
+        try {
+          await executeCurrentStep();
+        } catch (error) {
+          console.error('Error executing step:', error);
+          tutorialState.mode = 'error' as TutorialMode;
+          tutorialState.error = error instanceof Error ? error.message : String(error);
+          overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+        }
+      }, 2500);
+    }
+  });
+
+  // Tutorial: Cancel/reset tutorial
+  ipcMain.on(IPC_CHANNELS.CANCEL_TUTORIAL, () => {
+    tutorialState = {
+      mode: 'idle' as TutorialMode,
+      plan: null,
+      currentStepIndex: 0,
+      targetCoords: null,
+      error: null,
+    };
+    overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+  });
+}
+
+/**
+ * Execute the current step in the tutorial (with parallel screenshot racing)
+ */
+async function executeCurrentStep(retryCount: number = 0): Promise<void> {
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY = 1000;
+  const STAGGER_DELAY = 1000;
+
+  if (!tutorialState.plan || !tutorialState.plan.steps) {
+    tutorialState.mode = 'error' as TutorialMode;
+    tutorialState.error = 'No plan available';
+    overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    return;
+  }
+
+  const step = tutorialState.plan.steps[tutorialState.currentStepIndex];
+  if (!step) {
+    // All steps complete
+    console.log('Tutorial complete!');
+    tutorialState.mode = 'complete' as TutorialMode;
+    tutorialState.targetCoords = null;
+    overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+    return;
+  }
+
+  console.log(`Executing step ${tutorialState.currentStepIndex + 1}:`, step);
+  tutorialState.mode = 'locating' as TutorialMode;
+  overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+
+  // Race two screenshots with staggered timing
+  const locateWithScreenshot = async (label: string) => {
+    const screenshotPath = await engineBridge.takeScreenshot();
+    const result = await engineBridge.locateElement(
+      screenshotPath,
+      step.target_text,
+      step.region || 'full',
+      step.is_icon || false,
+      step.instruction || '',
+      step.quad || null
+    );
+    return { ...result, label };
+  };
+
+  const promise1 = locateWithScreenshot('immediate');
+  const promise2 = new Promise<typeof promise1 extends Promise<infer T> ? T : never>((resolve) => {
+    setTimeout(async () => {
+      const result = await locateWithScreenshot('delayed');
+      resolve(result);
+    }, STAGGER_DELAY);
+  });
+
+  // Race for success
+  const raceForSuccess = async () => {
+    return new Promise<Awaited<typeof promise1>>(async (resolve) => {
+      let result1: Awaited<typeof promise1> | null = null;
+      let result2: Awaited<typeof promise1> | null = null;
+      let resolved = false;
+
+      const checkAndResolve = (res: Awaited<typeof promise1>, which: number) => {
+        if (resolved) return;
+
+        if (res.found && res.center) {
+          resolved = true;
+          console.log(`${res.label} screenshot found element first`);
+          resolve(res);
+        } else {
+          if (which === 1) result1 = res;
+          else result2 = res;
+
+          if (result1 && result2) {
+            resolved = true;
+            resolve(result1);
+          }
+        }
+      };
+
+      promise1.then((res) => checkAndResolve(res, 1));
+      promise2.then((res) => checkAndResolve(res, 2));
+    });
+  };
+
+  const result = await raceForSuccess();
+  console.log('Locate result:', JSON.stringify(result));
+
+  if (result.found && result.center) {
+    tutorialState.mode = 'highlighting' as TutorialMode;
+    const offset = global.menuBarOffset || { x: 0, y: 0 };
+    const dpr = screen.getPrimaryDisplay().scaleFactor || 2;
+    const offsetY = offset.y * dpr;
+
+    const spotlightData: SpotlightCoords = {
+      x: result.center[0],
+      y: result.center[1] - offsetY,
+      bbox: result.bbox
+        ? [result.bbox[0], result.bbox[1] - offsetY, result.bbox[2], result.bbox[3] - offsetY]
+        : null,
+    };
+
+    tutorialState.targetCoords = spotlightData;
+    console.log('Spotlight target (adjusted):', spotlightData, 'offset:', offsetY);
+    overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, spotlightData);
+  } else {
+    console.log('Element not found, suggestions:', result.suggestions);
+    if (retryCount < MAX_RETRIES - 1) {
+      setTimeout(async () => {
+        try {
+          await executeCurrentStep(retryCount + 1);
+        } catch (error) {
+          console.error('Retry error:', error);
+          tutorialState.mode = 'error' as TutorialMode;
+          tutorialState.error = error instanceof Error ? error.message : String(error);
+          overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+        }
+      }, RETRY_DELAY);
+    } else {
+      // Skip to next step
+      tutorialState.currentStepIndex++;
+
+      if (tutorialState.currentStepIndex < tutorialState.plan.steps.length) {
+        await executeCurrentStep(0);
+      } else {
+        tutorialState.mode = 'complete' as TutorialMode;
+        tutorialState.error = null;
+        overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+      }
+    }
+  }
+}
+
+function startGlobalMouseTracking(): void {
+  try {
+    uIOhook.on('mousemove', (e) => {
+      if (overlayWindow && overlayWindow.webContents) {
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_MOVE, {
+          position: { x: e.x, y: e.y },
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    uIOhook.on('mousedown', (e) => {
+      if (overlayWindow && overlayWindow.webContents) {
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_DOWN, {
+          position: { x: e.x, y: e.y },
+          button: e.button,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    uIOhook.on('mouseup', (e) => {
+      if (overlayWindow && overlayWindow.webContents) {
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_UP, {
+          position: { x: e.x, y: e.y },
+          button: e.button,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    uIOhook.on('click', (e) => {
+      if (overlayWindow && overlayWindow.webContents) {
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_CLICK, {
+          position: { x: e.x, y: e.y },
+          button: e.button,
+          clicks: e.clicks,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    uIOhook.on('wheel', (e) => {
+      if (overlayWindow && overlayWindow.webContents) {
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_SCROLL, {
+          position: { x: e.x, y: e.y },
+          rotation: e.rotation,
+          direction: e.direction,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    uIOhook.start();
+  } catch (err) {
+    console.error('Failed to start mouse hooks - check Accessibility permissions');
+
+    // Fallback to position-only tracking
+    mouseTrackingInterval = setInterval(() => {
+      const pos = screen.getCursorScreenPoint();
+      if (pos.x !== lastMousePos.x || pos.y !== lastMousePos.y) {
+        if (overlayWindow && overlayWindow.webContents) {
+          overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_MOVE, {
+            position: { x: pos.x, y: pos.y },
+            timestamp: Date.now(),
+          });
+        }
+        lastMousePos = { x: pos.x, y: pos.y };
+      }
+    }, 16);
+  }
+}
+
+function stopGlobalMouseTracking(): void {
+  try {
+    uIOhook.stop();
+  } catch (err) {
+    // Ignore stop errors
+  }
+
+  if (mouseTrackingInterval) {
+    clearInterval(mouseTrackingInterval);
+    mouseTrackingInterval = null;
+  }
+}
+
+app.whenReady().then(() => {
+  setupIpcHandlers();
+  createOverlayWindow();
+
+  // Start global mouse tracking
+  startGlobalMouseTracking();
+
+  // Register global keyboard shortcut for quitting
+  globalShortcut.register('CommandOrControl+Q', () => {
+    forceQuit();
+  });
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createOverlayWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  forceQuit();
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+});
