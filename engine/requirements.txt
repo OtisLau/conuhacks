@@ -14,9 +14,16 @@ google-generativeai>=0.3.0
 # Modal (for OmniParser GPU inference)
 modal>=0.56.0
 
+# FastAPI Server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+websockets>=12.0
+
 # Testing
 pytest>=7.0.0
 pytest-cov>=4.0.0
+httpx>=0.25.0  # For testing FastAPI
 
 # Optional: for faster image operations
 # numpy>=1.24.0
