@@ -1,4 +1,5 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
+import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 export default defineConfig({
@@ -24,15 +25,39 @@ export default defineConfig({
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      lib: {
-        entry: resolve(__dirname, 'src/preload/overlay.ts'),
+      rollupOptions: {
+        input: {
+          overlay: resolve(__dirname, 'src/preload/overlay.ts'),
+          spotlight: resolve(__dirname, 'src/preload/spotlight.ts'),
+        },
+        output: {
+          format: 'cjs',
+        },
+      },
+    },
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src'),
+        '@shared': resolve(__dirname, 'src/shared'),
       },
     },
   },
   renderer: {
+    root: '.',
+    plugins: [react()],
     build: {
       rollupOptions: {
-        input: resolve(__dirname, 'overlay.html'),
+        input: {
+          overlay: resolve(__dirname, 'src/renderer/overlay/index.html'),
+          spotlight: resolve(__dirname, 'src/renderer/spotlight/index.html'),
+        },
+      },
+    },
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src'),
+        '@shared': resolve(__dirname, 'src/shared'),
+        '@renderer': resolve(__dirname, 'src/renderer'),
       },
     },
   },
