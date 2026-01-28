@@ -175,6 +175,22 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
   // Show error state
   const showError = tutorialMode === 'error' && tutorialError;
 
+  // Show step controls during highlighting or error state (when we have a plan)
+  const showStepControls = plan && (tutorialMode === 'highlighting' || tutorialMode === 'error' || tutorialMode === 'locating');
+
+  // Button handlers
+  const handleRetry = () => {
+    window.electronAPI.retryStep();
+  };
+
+  const handleSkip = () => {
+    window.electronAPI.skipStep();
+  };
+
+  const handleCancel = () => {
+    window.electronAPI.cancelTutorial();
+  };
+
   return (
     <>
       {showError && (
@@ -185,6 +201,28 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
         >
           <span className="error-icon">!</span>
           <span className="error-message">{tutorialError}</span>
+        </div>
+      )}
+      {showStepControls && (
+        <div
+          className="step-controls"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <span className="step-info">
+            Step {currentStep + 1} of {plan.steps.length}
+          </span>
+          <div className="step-buttons">
+            <button className="step-btn retry-btn" onClick={handleRetry} title="Retry finding this element">
+              Retry
+            </button>
+            <button className="step-btn skip-btn" onClick={handleSkip} title="Skip this step">
+              Skip
+            </button>
+            <button className="step-btn cancel-btn" onClick={handleCancel} title="Cancel tutorial">
+              Cancel
+            </button>
+          </div>
         </div>
       )}
       <div

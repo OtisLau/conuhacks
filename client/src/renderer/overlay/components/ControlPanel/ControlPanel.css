@@ -192,3 +192,93 @@ textarea::placeholder {
 .control-panel.has-error {
   border-color: rgba(220, 38, 38, 0.5);
 }
+
+/* Step controls */
+.step-controls {
+  position: absolute;
+  top: 90px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(
+    145deg,
+    rgba(50, 50, 55, 0.85) 0%,
+    rgba(35, 35, 40, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  z-index: 3;
+  pointer-events: auto;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+.step-info {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 400;
+  padding-right: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.step-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.step-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.step-btn:hover {
+  transform: translateY(-1px);
+}
+
+.step-btn:active {
+  transform: translateY(0);
+}
+
+.retry-btn {
+  background: rgba(59, 130, 246, 0.8);
+  color: white;
+}
+
+.retry-btn:hover {
+  background: rgba(59, 130, 246, 1);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.skip-btn {
+  background: rgba(100, 100, 100, 0.6);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.skip-btn:hover {
+  background: rgba(120, 120, 120, 0.8);
+}
+
+.cancel-btn {
+  background: rgba(220, 38, 38, 0.7);
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: rgba(220, 38, 38, 0.9);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+}
+
+/* Adjust error banner position when step controls are shown */
+.error-banner {
+  top: 150px;
+}

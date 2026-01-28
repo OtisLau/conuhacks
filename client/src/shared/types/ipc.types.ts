@@ -47,6 +47,10 @@ export interface ElectronAPI {
   onBackendStatus: (callback: (status: BackendStatus) => void) => () => void;
   onBackendReadiness: (callback: (readiness: BackendReadiness) => void) => () => void;
 
+  // Step controls
+  retryStep: () => void;
+  skipStep: () => void;
+
   // Window control
   send: (channel: string, data: unknown) => void;
 }

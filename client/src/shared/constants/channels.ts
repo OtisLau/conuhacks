@@ -31,6 +31,10 @@ export const IPC_CHANNELS = {
   BACKEND_STATUS: 'backend:status',
   BACKEND_READINESS: 'backend:readiness',
   CHECK_BACKEND_HEALTH: 'backend:check-health',
+
+  // Step control channels
+  STEP_RETRY: 'tutorial:step-retry',
+  STEP_SKIP: 'tutorial:step-skip',
 } as const;
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS];

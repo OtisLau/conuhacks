@@ -23,6 +23,9 @@ const IPC_CHANNELS = {
   BACKEND_STATUS: 'backend:status',
   BACKEND_READINESS: 'backend:readiness',
   CHECK_BACKEND_HEALTH: 'backend:check-health',
+  // Step control channels
+  STEP_RETRY: 'tutorial:step-retry',
+  STEP_SKIP: 'tutorial:step-skip',
 } as const;
 
 const electronAPI: ElectronAPI = {
@@ -99,6 +102,15 @@ const electronAPI: ElectronAPI = {
   // Backend status
   checkBackendHealth: () =>
     ipcRenderer.invoke(IPC_CHANNELS.CHECK_BACKEND_HEALTH),
+
+  // Step controls
+  retryStep: () => {
+    ipcRenderer.send(IPC_CHANNELS.STEP_RETRY);
+  },
+
+  skipStep: () => {
+    ipcRenderer.send(IPC_CHANNELS.STEP_SKIP);
+  },
 
   onBackendStatus: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, status: any) => callback(status);

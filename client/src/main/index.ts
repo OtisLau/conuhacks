@@ -342,6 +342,49 @@ function setupIpcHandlers(): void {
     overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
     overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
   });
+
+  // Tutorial: Retry current step (re-take screenshot and locate)
+  ipcMain.on(IPC_CHANNELS.STEP_RETRY, async () => {
+    if (tutorialState.mode === 'error' || tutorialState.mode === 'highlighting') {
+      console.log('Retrying current step...');
+      tutorialState.error = null;
+      try {
+        await executeCurrentStep();
+      } catch (error) {
+        console.error('Retry error:', error);
+        tutorialState.mode = 'error' as TutorialMode;
+        tutorialState.error = error instanceof Error ? error.message : String(error);
+        overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+      }
+    }
+  });
+
+  // Tutorial: Skip current step and move to next
+  ipcMain.on(IPC_CHANNELS.STEP_SKIP, async () => {
+    if (tutorialState.plan && tutorialState.plan.steps) {
+      console.log('Skipping current step...');
+      tutorialState.currentStepIndex++;
+      tutorialState.error = null;
+      tutorialState.targetCoords = null;
+      overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+
+      if (tutorialState.currentStepIndex >= tutorialState.plan.steps.length) {
+        // All steps complete
+        tutorialState.mode = 'complete' as TutorialMode;
+        overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+      } else {
+        // Execute next step
+        try {
+          await executeCurrentStep();
+        } catch (error) {
+          console.error('Skip to next step error:', error);
+          tutorialState.mode = 'error' as TutorialMode;
+          tutorialState.error = error instanceof Error ? error.message : String(error);
+          overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+        }
+      }
+    }
+  });
 }
 
 /**
