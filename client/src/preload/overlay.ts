@@ -4,8 +4,22 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS } from '../shared/constants/channels';
 import type { ElectronAPI } from '../shared/types/ipc.types';
+
+// Inline IPC_CHANNELS to avoid code splitting in preload
+const IPC_CHANNELS = {
+  START_TUTORIAL: 'start-tutorial',
+  CANCEL_TUTORIAL: 'cancel-tutorial',
+  TARGET_CLICKED: 'target-clicked',
+  TUTORIAL_STATE_CHANGE: 'tutorial-state-change',
+  SET_SPOTLIGHT_POSITION: 'set-spotlight-position',
+  GLOBAL_MOUSE_MOVE: 'global-mouse-move',
+  GLOBAL_MOUSE_DOWN: 'global-mouse-down',
+  GLOBAL_MOUSE_UP: 'global-mouse-up',
+  GLOBAL_CLICK: 'global-click',
+  GLOBAL_SCROLL: 'global-scroll',
+  SET_CLICK_THROUGH: 'set-click-through',
+} as const;
 
 const electronAPI: ElectronAPI = {
   // Tutorial commands

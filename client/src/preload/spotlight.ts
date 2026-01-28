@@ -1,10 +1,14 @@
 /**
  * Preload script for spotlight window
- * Simpler than overlay - only needs mouse events
+ * Minimal - only needs mouse move events
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS } from '../shared/constants/channels';
+
+// Inline IPC_CHANNELS to avoid code splitting in preload
+const IPC_CHANNELS = {
+  GLOBAL_MOUSE_MOVE: 'global-mouse-move',
+} as const;
 
 const electronAPI = {
   // Mouse event listeners

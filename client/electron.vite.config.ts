@@ -32,8 +32,13 @@ export default defineConfig({
         },
         output: {
           format: 'cjs',
+          // Disable code splitting for preload scripts - they must be self-contained
+          inlineDynamicImports: false,
+          manualChunks: undefined,
         },
       },
+      // Disable minification to help with debugging
+      minify: false,
     },
     resolve: {
       alias: {

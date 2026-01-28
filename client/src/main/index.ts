@@ -91,11 +91,23 @@ function createOverlayWindow(): void {
   // In development with electron-vite, use the dev server
   // In production, load from built files
   if (process.env.VITE_DEV_SERVER_URL) {
-    overlayWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    // electron-vite serves multi-entry apps at: BASE_URL/entry-name.html
+    const overlayUrl = process.env.VITE_DEV_SERVER_URL + 'src/renderer/overlay/index.html';
+    console.log('Loading overlay from:', overlayUrl);
+    overlayWindow.loadURL(overlayUrl);
   } else {
     // Built files will be in out/renderer/src/renderer/overlay/
     overlayWindow.loadFile(path.join(__dirname, '..', 'renderer', 'src', 'renderer', 'overlay', 'index.html'));
   }
+
+  // Log when page loads
+  overlayWindow.webContents.on('did-finish-load', () => {
+    console.log('Overlay window loaded successfully');
+  });
+
+  overlayWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error('Overlay window failed to load:', errorCode, errorDescription);
+  });
 
   if (process.argv.includes('--dev')) {
     overlayWindow.webContents.openDevTools({ mode: 'detach' });
