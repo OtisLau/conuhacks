@@ -14,31 +14,82 @@ import type { EngineBridge as IEngineBridge } from '../../shared/types/engine.ty
 // API base URL (FastAPI server)
 const API_BASE_URL = process.env.ENGINE_API_URL || 'http://127.0.0.1:8000';
 
+// Default request timeout (30 seconds)
+const REQUEST_TIMEOUT = 30000;
+
 /**
- * Make an API request to the FastAPI server
+ * Custom error class for API errors
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode?: number,
+    public endpoint?: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * Make an API request to the FastAPI server with timeout support
  */
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeout: number = REQUEST_TIMEOUT
 ): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData.detail || `API error: ${response.status} ${response.statusText}`
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const message = typeof errorData.detail === 'string'
+        ? errorData.detail
+        : Array.isArray(errorData.detail)
+          ? errorData.detail.map((e: { msg: string }) => e.msg).join(', ')
+          : `API error: ${response.status} ${response.statusText}`;
+      throw new ApiError(message, response.status, endpoint);
+    }
+
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new ApiError(`Request timeout after ${timeout}ms`, undefined, endpoint);
+      }
+      if (error.message.includes('fetch')) {
+        throw new ApiError('Cannot connect to backend server', undefined, endpoint);
+      }
+    }
+
+    throw new ApiError(
+      error instanceof Error ? error.message : 'Unknown error',
+      undefined,
+      endpoint
     );
   }
-
-  return response.json();
 }
 
 /**
@@ -67,22 +118,44 @@ async function takeScreenshot(): Promise<string> {
     success: boolean;
     width: number;
     height: number;
-    image: string;
+    image?: string;
+    path?: string;
   }
 
-  const result = await apiRequest<ScreenshotResponse>('/screenshot', {
-    method: 'POST',
-    body: JSON.stringify({ return_base64: true }),
-  });
+  try {
+    const result = await apiRequest<ScreenshotResponse>('/screenshot', {
+      method: 'POST',
+      body: JSON.stringify({ return_base64: true }),
+    });
 
-  if (!result.success || !result.image) {
-    throw new Error('Screenshot capture failed');
+    if (!result.success) {
+      throw new ApiError('Screenshot capture failed: backend returned unsuccessful', undefined, '/screenshot');
+    }
+
+    if (!result.image) {
+      throw new ApiError('Screenshot capture failed: no image data returned', undefined, '/screenshot');
+    }
+
+    // Validate base64 data
+    if (result.image.length === 0) {
+      throw new ApiError('Screenshot capture failed: empty image data', undefined, '/screenshot');
+    }
+
+    // Save base64 image to temp file
+    base64ToFile(result.image, tmpPath);
+
+    console.log(`Screenshot saved: ${tmpPath} (${result.width}x${result.height})`);
+    return tmpPath;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError(
+      `Screenshot failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      undefined,
+      '/screenshot'
+    );
   }
-
-  // Save base64 image to temp file for backwards compatibility
-  base64ToFile(result.image, tmpPath);
-
-  return tmpPath;
 }
 
 /**
@@ -92,8 +165,21 @@ async function generatePlan(
   screenshotPath: string,
   task: string
 ): Promise<TutorialPlan> {
+  if (!task || task.trim().length === 0) {
+    throw new ApiError('Task description is required', undefined, '/plan');
+  }
+
   // Read screenshot and encode as base64
-  const imageBase64 = fileToBase64(screenshotPath);
+  let imageBase64: string;
+  try {
+    imageBase64 = fileToBase64(screenshotPath);
+  } catch (error) {
+    throw new ApiError(
+      `Failed to read screenshot: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      undefined,
+      '/plan'
+    );
+  }
 
   interface PlanResponse {
     task: string;
@@ -108,25 +194,52 @@ async function generatePlan(
     analysis?: string;
   }
 
-  const result = await apiRequest<PlanResponse>('/plan', {
-    method: 'POST',
-    body: JSON.stringify({
-      task,
-      image: imageBase64,
-      max_steps: 8,
-    }),
-  });
+  try {
+    const result = await apiRequest<PlanResponse>('/plan', {
+      method: 'POST',
+      body: JSON.stringify({
+        task: task.trim(),
+        image: imageBase64,
+        max_steps: 8,
+      }),
+    }, 60000); // 60 second timeout for plan generation (AI can be slow)
 
-  // Convert to TutorialPlan format
-  return {
-    steps: result.steps.map((step) => ({
-      instruction: step.instruction,
-      target_text: step.target_text,
-      region: step.region as 'full' | 'top' | 'bottom' | 'left' | 'right',
-      is_icon: step.is_icon,
-      quad: typeof step.quad === 'number' ? step.quad : null,
-    })),
-  };
+    // Validate response
+    if (!result.steps || !Array.isArray(result.steps)) {
+      throw new ApiError('Invalid plan response: missing steps array', undefined, '/plan');
+    }
+
+    if (result.steps.length === 0) {
+      throw new ApiError('Plan generation returned no steps. Try rephrasing your task.', undefined, '/plan');
+    }
+
+    console.log(`Plan generated: ${result.steps.length} steps for task "${task}"`);
+
+    // Convert to TutorialPlan format with validation
+    return {
+      steps: result.steps.map((step, index) => {
+        if (!step.instruction || !step.target_text) {
+          console.warn(`Step ${index} missing required fields:`, step);
+        }
+        return {
+          instruction: step.instruction || `Step ${index + 1}`,
+          target_text: step.target_text || '',
+          region: (step.region as 'full' | 'top' | 'bottom' | 'left' | 'right') || 'full',
+          is_icon: step.is_icon || false,
+          quad: typeof step.quad === 'number' ? step.quad : null,
+        };
+      }),
+    };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError(
+      `Plan generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      undefined,
+      '/plan'
+    );
+  }
 }
 
 /**
@@ -140,8 +253,21 @@ async function locateElement(
   instruction: string = '',
   quad: number | null = null
 ): Promise<LocateResult> {
+  if (!target || target.trim().length === 0) {
+    throw new ApiError('Target text is required for element location', undefined, '/locate');
+  }
+
   // Read screenshot and encode as base64
-  const imageBase64 = fileToBase64(screenshotPath);
+  let imageBase64: string;
+  try {
+    imageBase64 = fileToBase64(screenshotPath);
+  } catch (error) {
+    throw new ApiError(
+      `Failed to read screenshot: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      undefined,
+      '/locate'
+    );
+  }
 
   interface LocateResponse {
     found: boolean;
@@ -152,24 +278,43 @@ async function locateElement(
     suggestions: string[];
   }
 
-  const result = await apiRequest<LocateResponse>('/locate', {
-    method: 'POST',
-    body: JSON.stringify({
-      target,
-      image: imageBase64,
-      region,
-      is_icon: isIcon,
-      instruction: instruction || undefined,
-      quad: quad || undefined,
-    }),
-  });
+  try {
+    const result = await apiRequest<LocateResponse>('/locate', {
+      method: 'POST',
+      body: JSON.stringify({
+        target: target.trim(),
+        image: imageBase64,
+        region,
+        is_icon: isIcon,
+        instruction: instruction || undefined,
+        quad: quad || undefined,
+      }),
+    });
 
-  return {
-    found: result.found,
-    bbox: result.bbox || undefined,
-    center: result.center || undefined,
-    suggestions: result.suggestions,
-  };
+    console.log(`Locate "${target}": found=${result.found}, confidence=${result.confidence}%`);
+
+    if (result.found && result.center) {
+      console.log(`  Center: (${result.center[0]}, ${result.center[1]}), Method: ${result.method}`);
+    } else if (result.suggestions && result.suggestions.length > 0) {
+      console.log(`  Suggestions: ${result.suggestions.slice(0, 3).join(', ')}`);
+    }
+
+    return {
+      found: result.found,
+      bbox: result.bbox || undefined,
+      center: result.center || undefined,
+      suggestions: result.suggestions || [],
+    };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError(
+      `Element location failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      undefined,
+      '/locate'
+    );
+  }
 }
 
 /**
