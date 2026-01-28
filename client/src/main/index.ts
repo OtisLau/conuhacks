@@ -80,15 +80,22 @@ function createOverlayWindow(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, '..', '..', 'mouse_events', 'preload.js'),
+      preload: path.join(__dirname, '..', 'preload', 'overlay.js'),
     },
   });
 
   // Start with click-through enabled
   overlayWindow.setIgnoreMouseEvents(true, { forward: true });
 
-  // In development, __dirname is dist/main/, so go up to client/
-  overlayWindow.loadFile(path.join(__dirname, '..', '..', 'overlay.html'));
+  // Load the React renderer
+  // In development with electron-vite, use the dev server
+  // In production, load from built files
+  if (process.env.VITE_DEV_SERVER_URL) {
+    overlayWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+  } else {
+    // Built files will be in out/renderer/src/renderer/overlay/
+    overlayWindow.loadFile(path.join(__dirname, '..', 'renderer', 'src', 'renderer', 'overlay', 'index.html'));
+  }
 
   if (process.argv.includes('--dev')) {
     overlayWindow.webContents.openDevTools({ mode: 'detach' });
