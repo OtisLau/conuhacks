@@ -26,6 +26,11 @@ export const IPC_CHANNELS = {
   // Highlight channels (legacy, may not be needed)
   HIGHLIGHT: 'highlight',
   CLEAR_HIGHLIGHT: 'clear-highlight',
+
+  // Backend connection channels
+  BACKEND_STATUS: 'backend:status',
+  BACKEND_READINESS: 'backend:readiness',
+  CHECK_BACKEND_HEALTH: 'backend:check-health',
 } as const;
 
 export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS];
