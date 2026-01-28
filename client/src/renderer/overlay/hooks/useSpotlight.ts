@@ -1,10 +1,11 @@
 /**
  * Custom hook for spotlight animation state
  * Manages position, radius, and animation timing
+ * Now uses tutorial store for state management
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import type { SpotlightCoords } from '../../../shared/types/tutorial.types';
+import { useState, useEffect } from 'react';
+import { useTutorialStore } from '../store/tutorialStore';
 
 interface SpotlightState {
   isVisible: boolean;
@@ -45,65 +46,62 @@ export function useSpotlight() {
   const [fadingOut, setFadingOut] = useState(false);
   const [fadeStartTime, setFadeStartTime] = useState(0);
 
-  // Listen for spotlight position updates from main process
+  // Get spotlight coordinates from tutorial store
+  const targetCoords = useTutorialStore((state) => state.targetCoords);
+
+  // React to spotlight position changes from the store
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onSetSpotlightPosition((coords: SpotlightCoords | null) => {
-      console.log('=== SPOTLIGHT POSITION RECEIVED ===', coords);
+    console.log('=== SPOTLIGHT COORDS FROM STORE ===', targetCoords);
 
-      if (coords) {
-        const dpr = window.devicePixelRatio || 1;
+    if (targetCoords) {
+      const dpr = window.devicePixelRatio || 1;
 
-        // Calculate radius from bounding box if available
-        let targetRadius = DEFAULT_RADIUS * dpr;
-        if (coords.bbox && Array.isArray(coords.bbox) && coords.bbox.length === 4) {
-          const [x1, y1, x2, y2] = coords.bbox;
-          const bboxWidth = Math.abs(x2 - x1);
-          const bboxHeight = Math.abs(y2 - y1);
-          const calcRadius = Math.max(bboxWidth, bboxHeight) / 2 + 20;
-          targetRadius = Math.max(calcRadius, 50);
-          console.log('Bbox:', coords.bbox, 'Size:', bboxWidth, 'x', bboxHeight, 'Target Radius:', targetRadius);
-        }
-
-        // Calculate control panel center (start position for fly-out animation)
-        const controlPanelCenterX = (window.innerWidth - 20 - 210) * dpr;
-        const controlPanelCenterY = (20 + 30) * dpr;
-
-        // Start fly-out animation
-        setAnimation({
-          startX: controlPanelCenterX,
-          startY: controlPanelCenterY,
-          targetX: coords.x,
-          targetY: coords.y,
-          startRadius: START_RADIUS,
-          targetRadius,
-          startTime: Date.now(),
-          duration: ANIMATION_DURATION,
-        });
-
-        setSpotlight({
-          isVisible: true,
-          x: controlPanelCenterX,
-          y: controlPanelCenterY,
-          radius: START_RADIUS,
-          opacity: 1,
-          animating: true,
-        });
-
-        setFadingOut(false);
-      } else {
-        // Start fade-out animation
-        if (spotlight.isVisible && !fadingOut) {
-          setFadingOut(true);
-          setFadeStartTime(Date.now());
-          setAnimation(null);
-        }
+      // Calculate radius from bounding box if available
+      let targetRadius = DEFAULT_RADIUS * dpr;
+      if (targetCoords.bbox && Array.isArray(targetCoords.bbox) && targetCoords.bbox.length === 4) {
+        const [x1, y1, x2, y2] = targetCoords.bbox;
+        const bboxWidth = Math.abs(x2 - x1);
+        const bboxHeight = Math.abs(y2 - y1);
+        const calcRadius = Math.max(bboxWidth, bboxHeight) / 2 + 20;
+        targetRadius = Math.max(calcRadius, 50);
+        console.log('Bbox:', targetCoords.bbox, 'Size:', bboxWidth, 'x', bboxHeight, 'Target Radius:', targetRadius);
       }
-    });
 
-    return () => {
-      unsubscribe();
-    };
-  }, [spotlight.isVisible, fadingOut]);
+      // Calculate control panel center (start position for fly-out animation)
+      const controlPanelCenterX = (window.innerWidth - 20 - 210) * dpr;
+      const controlPanelCenterY = (20 + 30) * dpr;
+
+      // Start fly-out animation
+      setAnimation({
+        startX: controlPanelCenterX,
+        startY: controlPanelCenterY,
+        targetX: targetCoords.x,
+        targetY: targetCoords.y,
+        startRadius: START_RADIUS,
+        targetRadius,
+        startTime: Date.now(),
+        duration: ANIMATION_DURATION,
+      });
+
+      setSpotlight({
+        isVisible: true,
+        x: controlPanelCenterX,
+        y: controlPanelCenterY,
+        radius: START_RADIUS,
+        opacity: 1,
+        animating: true,
+      });
+
+      setFadingOut(false);
+    } else {
+      // Start fade-out animation
+      if (spotlight.isVisible && !fadingOut) {
+        setFadingOut(true);
+        setFadeStartTime(Date.now());
+        setAnimation(null);
+      }
+    }
+  }, [targetCoords, spotlight.isVisible, fadingOut]);
 
   // Animation loop
   useEffect(() => {

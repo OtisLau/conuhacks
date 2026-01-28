@@ -1,20 +1,36 @@
 /**
  * Control Panel component - main input interface
- * Ported from overlay.html control panel
+ * Uses Zustand stores for state management
  */
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useTutorialStore } from '../../store/tutorialStore';
+import { useUIStore } from '../../store/uiStore';
+import { useMouseStore } from '../../store/mouseStore';
+import { useLoadingMessages } from '../../hooks/useLoadingMessages';
 import './ControlPanel.css';
 
 interface ControlPanelProps {}
 
 const ControlPanel: React.FC<ControlPanelProps> = () => {
+  // Local state
   const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState('');
-  const [placeholder, setPlaceholder] = useState('Type your command...');
-  const [isDisabled, setIsDisabled] = useState(false);
-  const [height, setHeight] = useState(60); // Default height
+
+  // Store state
+  const tutorialMode = useTutorialStore((state) => state.mode);
+  const currentStep = useTutorialStore((state) => state.currentStepIndex);
+  const plan = useTutorialStore((state) => state.plan);
+
+  const isLoading = useUIStore((state) => state.isLoading);
+  const loadingMessage = useUIStore((state) => state.loadingMessage);
+  const placeholderText = useUIStore((state) => state.placeholderText);
+  const height = useUIStore((state) => state.controlPanelHeight);
+  const setHeight = useUIStore((state) => state.setControlPanelHeight);
+  const setLoading = useUIStore((state) => state.setLoading);
+  const setPlaceholderText = useUIStore((state) => state.setPlaceholderText);
+
+  const setTutorialMode = useMouseStore((state) => state.setTutorialMode);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -22,6 +38,56 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
   const MAX_HEIGHT = 300;
   const PILL_TO_RECT_THRESHOLD = 100;
   const RECT_BORDER_RADIUS = 25;
+
+  // Cycle loading messages when in planning mode
+  useLoadingMessages(tutorialMode === 'planning');
+
+  // Update placeholder based on tutorial state
+  useEffect(() => {
+    let newPlaceholder = '';
+    let disabled = false;
+
+    switch (tutorialMode) {
+      case 'idle':
+        newPlaceholder = 'Type your command...';
+        disabled = false;
+        setLoading(false);
+        break;
+      case 'planning':
+        newPlaceholder = 'Planning...';
+        disabled = true;
+        setLoading(true, 'Planning');
+        break;
+      case 'locating':
+        newPlaceholder = 'Finding element...';
+        disabled = true;
+        break;
+      case 'highlighting':
+        disabled = true;
+        setTutorialMode(true);
+        if (plan && plan.steps && plan.steps[currentStep]) {
+          const step = plan.steps[currentStep];
+          newPlaceholder = `Step ${currentStep + 1}: ${step.instruction}`;
+        } else {
+          newPlaceholder = `Step ${currentStep + 1}: Click the target`;
+        }
+        break;
+      case 'complete':
+        newPlaceholder = 'Done! Type next command...';
+        disabled = false;
+        setLoading(false);
+        setTutorialMode(false);
+        break;
+      case 'error':
+        newPlaceholder = 'Type your command...';
+        disabled = false;
+        setLoading(false);
+        setTutorialMode(false);
+        break;
+    }
+
+    setPlaceholderText(newPlaceholder);
+  }, [tutorialMode, currentStep, plan, setLoading, setPlaceholderText, setTutorialMode]);
 
   // Auto-resize control panel based on textarea content
   const adjustHeight = () => {
@@ -65,22 +131,18 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
       if (!task) return;
 
       console.log('Starting tutorial:', task);
-      setIsLoading(true);
-      setIsDisabled(true);
+      setLoading(true, 'Planning');
       setInputValue('');
 
       try {
         const result = await window.electronAPI.startTutorial(task);
         if (!result.success) {
           console.error('Tutorial failed:', result.error);
-          setIsDisabled(false);
         }
       } catch (error) {
         console.error('Tutorial error:', error);
-        setIsDisabled(false);
-      } finally {
-        setIsLoading(false);
       }
+      // Loading state will be cleared by store updates from main process
     }
   };
 
@@ -97,6 +159,8 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
     ? `${height / 2}px`
     : `${RECT_BORDER_RADIUS}px`;
 
+  const isDisabled = tutorialMode !== 'idle' && tutorialMode !== 'complete';
+
   return (
     <div
       ref={panelRef}
@@ -106,14 +170,14 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
       onMouseLeave={handleMouseLeave}
     >
       {isLoading && (
-        <div className="loading-text-display">{loadingText}</div>
+        <div className="loading-text-display">{loadingMessage}...</div>
       )}
       <textarea
         ref={textareaRef}
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder}
+        placeholder={placeholderText}
         disabled={isDisabled}
         style={{ height: `${height}px` }}
         autoFocus

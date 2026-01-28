@@ -16,7 +16,7 @@ import type { MousePosition } from '../shared/types/mouse.types';
 import { IPC_CHANNELS } from '../shared/constants/channels';
 
 let overlayWindow: BrowserWindow | null = null;
-// let spotlightWindow: BrowserWindow | null = null; // Commented out for Phase 1
+let spotlightWindow: BrowserWindow | null = null;
 let mouseTrackingInterval: NodeJS.Timeout | null = null;
 let lastMousePos: MousePosition = { x: 0, y: 0 };
 
@@ -102,41 +102,46 @@ function createOverlayWindow(): void {
   }
 }
 
-// function createSpotlightWindow(): void {
-//   const primaryDisplay = screen.getPrimaryDisplay();
-//   const { x, y, width, height } = primaryDisplay.bounds;
+function createSpotlightWindow(): void {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { x, y, width, height } = primaryDisplay.bounds;
 
-//   spotlightWindow = new BrowserWindow({
-//     x,
-//     y,
-//     width,
-//     height,
-//     transparent: true,
-//     frame: false,
-//     alwaysOnTop: true,
-//     skipTaskbar: true,
-//     hasShadow: false,
-//     resizable: false,
-//     movable: false,
-//     minimizable: false,
-//     maximizable: false,
-//     closable: false,
-//     webPreferences: {
-//       nodeIntegration: false,
-//       contextIsolation: true,
-//       preload: path.join(__dirname, '..', '..', 'mouse_events', 'preload.js'),
-//     },
-//   });
+  spotlightWindow = new BrowserWindow({
+    x,
+    y,
+    width,
+    height,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, '..', 'preload', 'spotlight.js'),
+    },
+  });
 
-//   // Start with click-through enabled
-//   spotlightWindow.setIgnoreMouseEvents(true, { forward: true });
+  // Start with click-through enabled
+  spotlightWindow.setIgnoreMouseEvents(true, { forward: true });
 
-//   spotlightWindow.loadFile(path.join(__dirname, '..', '..', '..', 'spotlight', 'index.html'));
+  // Load the React spotlight renderer
+  if (process.env.VITE_DEV_SERVER_URL) {
+    spotlightWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}/src/renderer/spotlight/index.html`);
+  } else {
+    spotlightWindow.loadFile(path.join(__dirname, '..', 'renderer', 'src', 'renderer', 'spotlight', 'index.html'));
+  }
 
-//   if (process.argv.includes('--dev')) {
-//     spotlightWindow.webContents.openDevTools({ mode: 'detach' });
-//   }
-// }
+  if (process.argv.includes('--dev')) {
+    spotlightWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+}
 
 function setupIpcHandlers(): void {
   ipcMain.on(IPC_CHANNELS.SET_CLICK_THROUGH, (_event, enabled: boolean) => {
@@ -362,11 +367,17 @@ async function executeCurrentStep(retryCount: number = 0): Promise<void> {
 function startGlobalMouseTracking(): void {
   try {
     uIOhook.on('mousemove', (e) => {
+      const event = {
+        position: { x: e.x, y: e.y },
+        timestamp: Date.now(),
+      };
+
       if (overlayWindow && overlayWindow.webContents) {
-        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_MOVE, {
-          position: { x: e.x, y: e.y },
-          timestamp: Date.now(),
-        });
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_MOVE, event);
+      }
+
+      if (spotlightWindow && spotlightWindow.webContents) {
+        spotlightWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_MOVE, event);
       }
     });
 
@@ -448,6 +459,7 @@ function stopGlobalMouseTracking(): void {
 app.whenReady().then(() => {
   setupIpcHandlers();
   createOverlayWindow();
+  createSpotlightWindow();
 
   // Start global mouse tracking
   startGlobalMouseTracking();
