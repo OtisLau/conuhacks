@@ -1,0 +1,22 @@
+/**
+ * Global styles for overlay window
+ * Ported from overlay.html
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  overflow: hidden;
+  background: transparent;
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
