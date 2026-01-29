@@ -25,6 +25,7 @@ import type {
   ErrorData,
 } from '../shared/types/websocket.types';
 import { IPC_CHANNELS } from '../shared/constants/channels';
+import { getUserFriendlyError } from '../shared/utils/errorMessages';
 
 let overlayWindow: BrowserWindow | null = null;
 let spotlightWindow: BrowserWindow | null = null;
@@ -194,6 +195,7 @@ function setupWebSocketHandlers(): void {
 
       if (data.found && data.center) {
         tutorialState.mode = 'highlighting' as TutorialMode;
+        tutorialState.suggestions = undefined; // Clear suggestions on success
 
         // Apply coordinate offset for menu bar
         const offset = global.menuBarOffset || { x: 0, y: 0 };
@@ -215,10 +217,11 @@ function setupWebSocketHandlers(): void {
       } else {
         // Element not found
         tutorialState.mode = 'error' as TutorialMode;
-        tutorialState.error = `Could not find "${tutorialState.plan?.steps[tutorialState.currentStepIndex]?.target_text || 'target'}"`;
-        if (data.suggestions && data.suggestions.length > 0) {
-          tutorialState.error += `. Suggestions: ${data.suggestions.slice(0, 3).join(', ')}`;
-        }
+        const targetName = tutorialState.plan?.steps[tutorialState.currentStepIndex]?.target_text || 'target';
+        tutorialState.error = `Could not find "${targetName}"`;
+        tutorialState.suggestions = data.suggestions?.slice(0, 5) || [];
+
+        console.log('Element not found. Suggestions:', tutorialState.suggestions);
         overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
       }
     },
@@ -426,15 +429,10 @@ function setupIpcHandlers(): void {
       console.error('Tutorial error:', error);
       tutorialState.mode = 'error' as TutorialMode;
 
-      // Provide user-friendly error messages
-      let errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('Cannot connect to backend')) {
-        errorMessage = 'Cannot connect to backend server. Is it running?';
-      } else if (errorMessage.includes('timeout')) {
-        errorMessage = 'Request timed out. The AI service may be slow.';
-      }
-
+      // Convert to user-friendly error message
+      const errorMessage = getUserFriendlyError(error instanceof Error ? error : String(error));
       tutorialState.error = errorMessage;
+      tutorialState.suggestions = undefined;
       overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
       return { success: false, error: errorMessage };
     }
@@ -655,6 +653,7 @@ async function executeCurrentStep(retryCount: number = 0): Promise<void> {
   } else {
     console.log('Element not found, suggestions:', result.suggestions);
     if (retryCount < MAX_RETRIES - 1) {
+      // Auto-retry with delay
       setTimeout(async () => {
         try {
           await executeCurrentStep(retryCount + 1);
@@ -666,16 +665,13 @@ async function executeCurrentStep(retryCount: number = 0): Promise<void> {
         }
       }, RETRY_DELAY);
     } else {
-      // Skip to next step
-      tutorialState.currentStepIndex++;
-
-      if (tutorialState.currentStepIndex < tutorialState.plan.steps.length) {
-        await executeCurrentStep(0);
-      } else {
-        tutorialState.mode = 'complete' as TutorialMode;
-        tutorialState.error = null;
-        overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
-      }
+      // Max retries reached - show error with suggestions, let user decide
+      tutorialState.mode = 'error' as TutorialMode;
+      const targetName = step.target_text || 'target';
+      tutorialState.error = `Could not find "${targetName}" after ${MAX_RETRIES} attempts`;
+      tutorialState.suggestions = result.suggestions?.slice(0, 5) || [];
+      console.log('Max retries reached. User can retry or skip.');
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
     }
   }
 }

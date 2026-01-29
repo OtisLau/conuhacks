@@ -26,6 +26,8 @@ const WS_BASE_URL = process.env.ENGINE_WS_URL || 'ws://127.0.0.1:8000';
 // Reconnection settings
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAY_MS = 1000;
+const CONNECTION_TIMEOUT_MS = 10000;
+const HEARTBEAT_INTERVAL_MS = 30000;
 
 export class TaskWebSocket {
   private ws: WebSocket | null = null;
@@ -33,6 +35,8 @@ export class TaskWebSocket {
   private handlers: WebSocketEventHandlers = {};
   private reconnectAttempts = 0;
   private currentTask: string | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private connectionTimeout: NodeJS.Timeout | null = null;
 
   /**
    * Set event handlers
@@ -57,16 +61,22 @@ export class TaskWebSocket {
       return;
     }
 
+    // Clear any existing connection timeout
+    this.clearConnectionTimeout();
+
     return new Promise((resolve, reject) => {
       this.setState('connecting');
 
       try {
-        this.ws = new WebSocket(`${WS_BASE_URL}/ws/run`);
+        const wsUrl = `${WS_BASE_URL}/ws/run`;
+        console.log('Connecting to WebSocket:', wsUrl);
+        this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
-          console.log('WebSocket connected');
+          console.log('WebSocket connection opened');
           this.reconnectAttempts = 0;
-          // Don't set state to connected yet - wait for 'connected' event
+          this.clearConnectionTimeout();
+          // Don't set state to connected yet - wait for 'connected' event from server
         };
 
         this.ws.onmessage = (event) => {
@@ -76,6 +86,8 @@ export class TaskWebSocket {
 
             // Resolve on first 'connected' message
             if (message.type === 'connected') {
+              this.clearConnectionTimeout();
+              this.startHeartbeat();
               resolve();
             }
           } catch (error) {
@@ -85,59 +97,152 @@ export class TaskWebSocket {
 
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error);
+          this.clearConnectionTimeout();
+          this.stopHeartbeat();
           this.setState('error');
-          reject(new Error('WebSocket connection failed'));
+          reject(new Error('WebSocket connection failed. Is the backend server running?'));
         };
 
         this.ws.onclose = (event) => {
           console.log('WebSocket closed:', event.code, event.reason);
+          this.clearConnectionTimeout();
+          this.stopHeartbeat();
           this.ws = null;
 
-          if (this.state === 'running' && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          // Handle different close codes
+          const wasRunning = this.state === 'running';
+          const closeReason = this.getCloseReason(event.code);
+
+          if (wasRunning && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
             // Attempt reconnect if we were in the middle of a task
+            console.log(`Connection lost during task. ${closeReason}`);
             this.attemptReconnect();
           } else {
             this.setState('disconnected');
+            if (wasRunning) {
+              this.handlers.onError?.({
+                error: `Connection lost: ${closeReason}`,
+              });
+            }
           }
         };
 
-        // Timeout for connection
-        setTimeout(() => {
+        // Set connection timeout
+        this.connectionTimeout = setTimeout(() => {
           if (this.state === 'connecting') {
+            console.error('WebSocket connection timeout');
             this.ws?.close();
-            reject(new Error('WebSocket connection timeout'));
+            this.setState('error');
+            reject(new Error('Connection timeout. Backend may be unavailable.'));
           }
-        }, 10000);
+        }, CONNECTION_TIMEOUT_MS);
       } catch (error) {
+        this.clearConnectionTimeout();
         this.setState('error');
-        reject(error);
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        reject(new Error(`Failed to connect: ${message}`));
       }
     });
+  }
+
+  /**
+   * Get human-readable close reason from WebSocket close code
+   */
+  private getCloseReason(code: number): string {
+    switch (code) {
+      case 1000: return 'Normal closure';
+      case 1001: return 'Server going away';
+      case 1002: return 'Protocol error';
+      case 1003: return 'Unsupported data';
+      case 1006: return 'Connection lost unexpectedly';
+      case 1007: return 'Invalid data received';
+      case 1008: return 'Policy violation';
+      case 1009: return 'Message too large';
+      case 1011: return 'Server error';
+      case 1015: return 'TLS handshake failed';
+      default: return `Error code ${code}`;
+    }
+  }
+
+  /**
+   * Clear connection timeout timer
+   */
+  private clearConnectionTimeout(): void {
+    if (this.connectionTimeout) {
+      clearTimeout(this.connectionTimeout);
+      this.connectionTimeout = null;
+    }
+  }
+
+  /**
+   * Start heartbeat to keep connection alive
+   */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    // WebSocket ping/pong is handled at protocol level
+    // This is just for monitoring connection health
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        // Connection is still open
+      } else if (this.state === 'connected' || this.state === 'running') {
+        console.warn('Heartbeat detected closed connection');
+        this.setState('error');
+        this.handlers.onError?.({
+          error: 'Connection lost. Please try again.',
+        });
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  /**
+   * Stop heartbeat timer
+   */
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 
   /**
    * Disconnect from WebSocket server
    */
   disconnect(): void {
+    this.clearConnectionTimeout();
+    this.stopHeartbeat();
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(1000, 'Client disconnect');
       this.ws = null;
     }
     this.setState('disconnected');
     this.currentTask = null;
+    this.reconnectAttempts = 0;
   }
 
   /**
    * Start a new task
    */
   async startTask(task: string): Promise<void> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      await this.connect();
-    }
+    try {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        await this.connect();
+      }
 
-    this.currentTask = task;
-    this.setState('running');
-    this.send({ type: 'start_task', data: { task } });
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        throw new Error('Failed to establish connection');
+      }
+
+      this.currentTask = task;
+      this.setState('running');
+      this.send({ type: 'start_task', data: { task } });
+    } catch (error) {
+      this.setState('error');
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.handlers.onError?.({
+        error: `Failed to start task: ${message}`,
+      });
+      throw error;
+    }
   }
 
   /**
