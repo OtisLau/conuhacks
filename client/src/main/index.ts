@@ -7,13 +7,23 @@ import { app, BrowserWindow, screen, ipcMain, globalShortcut } from 'electron';
 import path from 'path';
 import { uIOhook } from 'uiohook-napi';
 import engineBridge, { checkApiHealth, checkApiReadiness } from './services/EngineBridge';
+import { taskWebSocket } from './services/TaskWebSocket';
 import type {
   TutorialState,
   TutorialMode,
   SpotlightCoords,
+  TutorialStep,
 } from '../shared/types/tutorial.types';
 import type { MousePosition } from '../shared/types/mouse.types';
 import type { BackendStatus, BackendReadiness } from '../shared/types/ipc.types';
+import type {
+  PlanReadyData,
+  StepStartedData,
+  StepResultData,
+  StepErrorData,
+  TaskCompleteData,
+  ErrorData,
+} from '../shared/types/websocket.types';
 import { IPC_CHANNELS } from '../shared/constants/channels';
 
 let overlayWindow: BrowserWindow | null = null;
@@ -26,6 +36,9 @@ let lastMousePos: MousePosition = { x: 0, y: 0 };
 let backendStatus: BackendStatus = { connected: false };
 let backendReadiness: BackendReadiness = { ready: false, tesseract: false, gemini: { available: false } };
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
+
+// Execution mode: 'rest' for REST API calls, 'websocket' for streaming WebSocket
+const EXECUTION_MODE: 'rest' | 'websocket' = 'websocket';
 
 // Tutorial state machine
 let tutorialState: TutorialState = {
@@ -127,6 +140,113 @@ function startHealthCheckInterval(): void {
     const status = await checkBackendConnection();
     broadcastBackendStatus(status);
   }, HEALTH_CHECK_INTERVAL);
+}
+
+/**
+ * Set up WebSocket event handlers for real-time task execution
+ */
+function setupWebSocketHandlers(): void {
+  taskWebSocket.setHandlers({
+    onStateChange: (state) => {
+      console.log('WebSocket state changed:', state);
+    },
+
+    onPlanStarted: (data) => {
+      console.log('Plan generation started:', data.task);
+      tutorialState.mode = 'planning' as TutorialMode;
+      tutorialState.error = null;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    },
+
+    onPlanReady: (data: PlanReadyData) => {
+      console.log(`Plan ready: ${data.total_steps} steps`);
+      // Convert WebSocket plan format to TutorialPlan
+      tutorialState.plan = {
+        steps: data.steps.map((step): TutorialStep => ({
+          instruction: step.instruction,
+          target_text: step.target_text,
+          region: step.region as 'full' | 'top' | 'bottom' | 'left' | 'right',
+          is_icon: step.is_icon,
+          quad: typeof step.quad === 'number' ? step.quad : null,
+        })),
+      };
+      tutorialState.currentStepIndex = 0;
+      tutorialState.mode = 'locating' as TutorialMode;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    },
+
+    onPlanError: (data) => {
+      console.error('Plan generation failed:', data.error);
+      tutorialState.mode = 'error' as TutorialMode;
+      tutorialState.error = data.error;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    },
+
+    onStepStarted: (data: StepStartedData) => {
+      console.log(`Step ${data.step_number} started: ${data.instruction}`);
+      tutorialState.currentStepIndex = data.step_number - 1;
+      tutorialState.mode = 'locating' as TutorialMode;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    },
+
+    onStepResult: (data: StepResultData) => {
+      console.log(`Step ${data.step_number} result: found=${data.found}`);
+
+      if (data.found && data.center) {
+        tutorialState.mode = 'highlighting' as TutorialMode;
+
+        // Apply coordinate offset for menu bar
+        const offset = global.menuBarOffset || { x: 0, y: 0 };
+        const dpr = screen.getPrimaryDisplay().scaleFactor || 2;
+        const offsetY = offset.y * dpr;
+
+        const spotlightData: SpotlightCoords = {
+          x: data.center[0],
+          y: data.center[1] - offsetY,
+          bbox: data.bbox
+            ? [data.bbox[0], data.bbox[1] - offsetY, data.bbox[2], data.bbox[3] - offsetY]
+            : null,
+        };
+
+        tutorialState.targetCoords = spotlightData;
+        overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+        overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, spotlightData);
+        spotlightWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, spotlightData);
+      } else {
+        // Element not found
+        tutorialState.mode = 'error' as TutorialMode;
+        tutorialState.error = `Could not find "${tutorialState.plan?.steps[tutorialState.currentStepIndex]?.target_text || 'target'}"`;
+        if (data.suggestions && data.suggestions.length > 0) {
+          tutorialState.error += `. Suggestions: ${data.suggestions.slice(0, 3).join(', ')}`;
+        }
+        overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+      }
+    },
+
+    onStepError: (data: StepErrorData) => {
+      console.error(`Step ${data.step_number} error:`, data.error);
+      tutorialState.mode = 'error' as TutorialMode;
+      tutorialState.error = data.error;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    },
+
+    onTaskComplete: (data: TaskCompleteData) => {
+      console.log(`Task complete: ${data.steps_completed}/${data.total_steps} steps, success=${data.success}`);
+      tutorialState.mode = 'complete' as TutorialMode;
+      tutorialState.targetCoords = null;
+      tutorialState.error = null;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+      overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+      spotlightWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+    },
+
+    onError: (data: ErrorData) => {
+      console.error('WebSocket error:', data.error);
+      tutorialState.mode = 'error' as TutorialMode;
+      tutorialState.error = data.error;
+      overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+    },
+  });
 }
 
 function createOverlayWindow(): void {
@@ -258,12 +378,25 @@ function setupIpcHandlers(): void {
       }
 
       console.log('Starting tutorial for task:', task);
+      console.log('Execution mode:', EXECUTION_MODE);
 
       // Check backend connection first
       if (!backendStatus.connected) {
         throw new Error('Backend is not connected. Please start the backend server.');
       }
 
+      // Use WebSocket mode for real-time streaming
+      if (EXECUTION_MODE === 'websocket') {
+        tutorialState.mode = 'planning' as TutorialMode;
+        tutorialState.error = null;
+        overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
+
+        // Start task via WebSocket - handlers will manage state updates
+        await taskWebSocket.startTask(task);
+        return { success: true };
+      }
+
+      // REST mode (original implementation)
       tutorialState.mode = 'planning' as TutorialMode;
       tutorialState.error = null;
       overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
@@ -310,11 +443,20 @@ function setupIpcHandlers(): void {
   // Tutorial: User clicked the target
   ipcMain.on(IPC_CHANNELS.TARGET_CLICKED, async () => {
     if (tutorialState.mode === 'highlighting') {
-      tutorialState.currentStepIndex++;
-
       // Clear the spotlight while waiting for next step
       tutorialState.targetCoords = null;
       overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+      spotlightWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+
+      if (EXECUTION_MODE === 'websocket') {
+        // Signal step completion to WebSocket - server handles next step
+        console.log('Step done via WebSocket');
+        taskWebSocket.stepDone();
+        return;
+      }
+
+      // REST mode
+      tutorialState.currentStepIndex++;
 
       // Wait for UI to settle after click (2.5s for page transitions)
       setTimeout(async () => {
@@ -332,6 +474,10 @@ function setupIpcHandlers(): void {
 
   // Tutorial: Cancel/reset tutorial
   ipcMain.on(IPC_CHANNELS.CANCEL_TUTORIAL, () => {
+    if (EXECUTION_MODE === 'websocket') {
+      taskWebSocket.cancel();
+    }
+
     tutorialState = {
       mode: 'idle' as TutorialMode,
       plan: null,
@@ -341,6 +487,7 @@ function setupIpcHandlers(): void {
     };
     overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
     overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+    spotlightWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
   });
 
   // Tutorial: Retry current step (re-take screenshot and locate)
@@ -348,6 +495,13 @@ function setupIpcHandlers(): void {
     if (tutorialState.mode === 'error' || tutorialState.mode === 'highlighting') {
       console.log('Retrying current step...');
       tutorialState.error = null;
+
+      if (EXECUTION_MODE === 'websocket') {
+        taskWebSocket.stepRetry();
+        return;
+      }
+
+      // REST mode
       try {
         await executeCurrentStep();
       } catch (error) {
@@ -363,10 +517,18 @@ function setupIpcHandlers(): void {
   ipcMain.on(IPC_CHANNELS.STEP_SKIP, async () => {
     if (tutorialState.plan && tutorialState.plan.steps) {
       console.log('Skipping current step...');
-      tutorialState.currentStepIndex++;
       tutorialState.error = null;
       tutorialState.targetCoords = null;
       overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+      spotlightWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, null);
+
+      if (EXECUTION_MODE === 'websocket') {
+        taskWebSocket.stepSkip();
+        return;
+      }
+
+      // REST mode
+      tutorialState.currentStepIndex++;
 
       if (tutorialState.currentStepIndex >= tutorialState.plan.steps.length) {
         // All steps complete
@@ -638,6 +800,14 @@ app.whenReady().then(() => {
 
   // Start backend health check monitoring
   startHealthCheckInterval();
+
+  // Set up WebSocket handlers for real-time execution
+  if (EXECUTION_MODE === 'websocket') {
+    setupWebSocketHandlers();
+    console.log('WebSocket mode enabled for task execution');
+  } else {
+    console.log('REST mode enabled for task execution');
+  }
 
   // Register global keyboard shortcut for quitting
   globalShortcut.register('CommandOrControl+Q', () => {
