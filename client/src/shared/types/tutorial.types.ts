@@ -35,6 +35,7 @@ export interface TutorialState {
   currentStepIndex: number;
   targetCoords: SpotlightCoords | null;
   error: string | null;
+  suggestions?: string[];
 }
 
 export interface LocateResult {

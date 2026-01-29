@@ -22,6 +22,7 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
   const currentStep = useTutorialStore((state) => state.currentStepIndex);
   const plan = useTutorialStore((state) => state.plan);
   const tutorialError = useTutorialStore((state) => state.error);
+  const suggestions = useTutorialStore((state) => state.suggestions);
 
   const isLoading = useUIStore((state) => state.isLoading);
   const loadingMessage = useUIStore((state) => state.loadingMessage);
@@ -191,16 +192,33 @@ const ControlPanel: React.FC<ControlPanelProps> = () => {
     window.electronAPI.cancelTutorial();
   };
 
+  // Check if we have suggestions to show
+  const hasSuggestions = suggestions && suggestions.length > 0;
+
   return (
     <>
       {showError && (
         <div
-          className="error-banner"
+          className={`error-banner ${hasSuggestions ? 'with-suggestions' : ''}`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <span className="error-icon">!</span>
-          <span className="error-message">{tutorialError}</span>
+          <div className="error-header">
+            <span className="error-icon">!</span>
+            <span className="error-message">{tutorialError}</span>
+          </div>
+          {hasSuggestions && (
+            <div className="suggestions-container">
+              <span className="suggestions-label">Did you mean:</span>
+              <div className="suggestions-list">
+                {suggestions.slice(0, 4).map((suggestion, index) => (
+                  <span key={index} className="suggestion-item">
+                    {suggestion}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
       {showStepControls && (

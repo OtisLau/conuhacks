@@ -24,6 +24,7 @@ const initialState: TutorialState = {
   currentStepIndex: 0,
   targetCoords: null,
   error: null,
+  suggestions: undefined,
 };
 
 export const useTutorialStore = create<TutorialStore>()(
