@@ -724,31 +724,27 @@ function startGlobalMouseTracking(): void {
     });
 
     uIOhook.on('mouseup', (e) => {
+      const eventData = {
+        position: {
+          x: e.x - global.menuBarOffset.x,
+          y: e.y - global.menuBarOffset.y
+        },
+        button: e.button,
+        timestamp: Date.now(),
+      };
+
       if (overlayWindow && overlayWindow.webContents) {
-        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_UP, {
-          position: {
-            x: e.x - global.menuBarOffset.x,
-            y: e.y - global.menuBarOffset.y
-          },
-          button: e.button,
-          timestamp: Date.now(),
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_MOUSE_UP, eventData);
+        // uIOhook doesn't have a 'click' event, so we send GLOBAL_CLICK on mouseup
+        // A click is complete when the mouse button is released
+        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_CLICK, {
+          ...eventData,
+          clicks: 1,
         });
       }
     });
 
-    uIOhook.on('click', (e) => {
-      if (overlayWindow && overlayWindow.webContents) {
-        overlayWindow.webContents.send(IPC_CHANNELS.GLOBAL_CLICK, {
-          position: {
-            x: e.x - global.menuBarOffset.x,
-            y: e.y - global.menuBarOffset.y
-          },
-          button: e.button,
-          clicks: e.clicks,
-          timestamp: Date.now(),
-        });
-      }
-    });
+    // Note: uIOhook does not have a 'click' event - clicks are handled via mouseup above
 
     uIOhook.on('wheel', (e) => {
       if (overlayWindow && overlayWindow.webContents) {
