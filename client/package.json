@@ -2,8 +2,15 @@
   "name": "conu",
   "version": "0.1.0",
   "description": "AI Screen Tutorial Guide",
-  "main": "main.js",
+  "main": "out/main/index.js",
   "scripts": {
+    "build:ts": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json",
+    "build:react": "electron-vite build",
+    "dev:react": "electron-vite dev",
+    "start:react": "npm run build:react && unset ELECTRON_RUN_AS_NODE && electron . --dev",
+    "dev:ts": "npm run build:ts && unset ELECTRON_RUN_AS_NODE && electron dist/main/index.js --dev",
+    "start:ts": "npm run build:ts && unset ELECTRON_RUN_AS_NODE && electron dist/main/index.js",
+    "typecheck": "tsc --noEmit",
     "start": "unset ELECTRON_RUN_AS_NODE && electron .",
     "dev": "unset ELECTRON_RUN_AS_NODE && electron . --dev",
     "kill": "pkill -f 'Electron.*conu/client'"
@@ -17,10 +24,24 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.3.3"
+    "@types/electron": "^1.4.38",
+    "@types/node": "^25.0.10",
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.1.2",
+    "electron": "^28.3.3",
+    "electron-vite": "^5.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "robotjs": "^0.6.0",
-    "uiohook-napi": "^1.5.4"
+    "uiohook-napi": "^1.5.4",
+    "ws": "^8.19.0",
+    "zustand": "^5.0.10"
   }
 }

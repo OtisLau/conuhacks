@@ -1,0 +1,68 @@
+.connection-status {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(30, 30, 30, 0.85);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+}
+
+.connection-status:hover {
+  background: rgba(40, 40, 40, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.status-text {
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+}
+
+/* Connected state */
+.connection-status.connected .status-dot {
+  background-color: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+/* Partial connection (services unavailable) */
+.connection-status.partial .status-dot {
+  background-color: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.5);
+}
+
+/* Disconnected state */
+.connection-status.disconnected .status-dot {
+  background-color: #f87171;
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+
+/* Checking state */
+.connection-status.checking .status-dot {
+  background-color: #60a5fa;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
