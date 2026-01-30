@@ -97,16 +97,19 @@ export function initializeMouseIPC() {
 
   // Global click
   window.electronAPI.onGlobalClick((event) => {
-    store.logEvent('click', event);
+    // Get fresh state on each click (not the stale captured state)
+    const currentState = useMouseStore.getState();
+    currentState.logEvent('click', event);
 
     // Check if in tutorial mode and handle target click
-    if (store.inTutorialMode) {
+    console.log('Global click received, inTutorialMode:', currentState.inTutorialMode);
+    if (currentState.inTutorialMode) {
       const now = Date.now();
-      const timeSinceLastClick = now - store.lastTargetClickTime;
+      const timeSinceLastClick = now - currentState.lastTargetClickTime;
 
       // Debounce: ignore clicks within 200ms of last target click
       if (timeSinceLastClick > 200) {
-        store.setLastTargetClickTime(now);
+        currentState.setLastTargetClickTime(now);
         console.log('Click detected in tutorial mode, notifying main process');
         window.electronAPI.notifyTargetClicked();
       }

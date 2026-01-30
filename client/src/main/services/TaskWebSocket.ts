@@ -5,6 +5,7 @@
  * task planning and execution updates.
  */
 
+import WebSocket from 'ws';
 import type {
   WebSocketState,
   WebSocketEventHandlers,

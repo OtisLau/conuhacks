@@ -197,16 +197,21 @@ function setupWebSocketHandlers(): void {
         tutorialState.mode = 'highlighting' as TutorialMode;
         tutorialState.suggestions = undefined; // Clear suggestions on success
 
-        // Apply coordinate offset for menu bar
+        // Convert backend coordinates (screenshot pixels) to CSS pixels
+        // Backend returns coordinates at full DPR resolution
         const offset = global.menuBarOffset || { x: 0, y: 0 };
         const dpr = screen.getPrimaryDisplay().scaleFactor || 2;
-        const offsetY = offset.y * dpr;
 
         const spotlightData: SpotlightCoords = {
-          x: data.center[0],
-          y: data.center[1] - offsetY,
+          x: data.center[0] / dpr,
+          y: data.center[1] / dpr - offset.y,
           bbox: data.bbox
-            ? [data.bbox[0], data.bbox[1] - offsetY, data.bbox[2], data.bbox[3] - offsetY]
+            ? [
+                data.bbox[0] / dpr,
+                data.bbox[1] / dpr - offset.y,
+                data.bbox[2] / dpr,
+                data.bbox[3] / dpr - offset.y,
+              ]
             : null,
         };
 
@@ -634,20 +639,26 @@ async function executeCurrentStep(retryCount: number = 0): Promise<void> {
 
   if (result.found && result.center) {
     tutorialState.mode = 'highlighting' as TutorialMode;
+    // Convert backend coordinates (screenshot pixels) to CSS pixels
+    // Backend returns coordinates at full DPR resolution
     const offset = global.menuBarOffset || { x: 0, y: 0 };
     const dpr = screen.getPrimaryDisplay().scaleFactor || 2;
-    const offsetY = offset.y * dpr;
 
     const spotlightData: SpotlightCoords = {
-      x: result.center[0],
-      y: result.center[1] - offsetY,
+      x: result.center[0] / dpr,
+      y: result.center[1] / dpr - offset.y,
       bbox: result.bbox
-        ? [result.bbox[0], result.bbox[1] - offsetY, result.bbox[2], result.bbox[3] - offsetY]
+        ? [
+            result.bbox[0] / dpr,
+            result.bbox[1] / dpr - offset.y,
+            result.bbox[2] / dpr,
+            result.bbox[3] / dpr - offset.y,
+          ]
         : null,
     };
 
     tutorialState.targetCoords = spotlightData;
-    console.log('Spotlight target (adjusted):', spotlightData, 'offset:', offsetY);
+    console.log('Spotlight target (adjusted):', spotlightData, 'dpr:', dpr, 'offset:', offset);
     overlayWindow?.webContents.send(IPC_CHANNELS.TUTORIAL_STATE_CHANGE, tutorialState);
     overlayWindow?.webContents.send(IPC_CHANNELS.SET_SPOTLIGHT_POSITION, spotlightData);
   } else {
